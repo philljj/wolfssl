@@ -113,6 +113,15 @@ static void lkmFipsCb(int ok, int err, const char* hash)
 static int updateFipsHash(void);
 #endif
 
+
+#ifdef LINUXKM_REGISTER_ALG
+static int  linuxkm_register_alg(void);
+static void linuxkm_unregister_alg(void);
+    #ifdef LINUXKM_TEST_ALG
+    static int linuxkm_test_alg(void);
+    #endif
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 static int __init wolfssl_init(void)
 #else
@@ -288,6 +297,27 @@ static int wolfssl_init(void)
         );
 #endif
 
+#ifdef LINUXKM_REGISTER_ALG
+    ret = linuxkm_register_alg();
+
+    if (ret) {
+        pr_err("linuxkm_register_alg failed with return code %d.\n", ret);
+        (void)libwolfssl_cleanup();
+        msleep(10);
+        return -ECANCELED;
+    }
+
+    #ifdef LINUXKM_TEST_ALG
+    ret = linuxkm_test_alg();
+
+    if (ret) {
+        pr_err("linuxkm_test_alg failed with return code %d.\n", ret);
+        /* (void)libwolfssl_cleanup();
+        msleep(10);
+        return -ECANCELED; */
+    }
+    #endif
+#endif
     return 0;
 }
 
@@ -301,6 +331,9 @@ static void wolfssl_exit(void)
 {
     (void)libwolfssl_cleanup();
 
+#ifdef LINUXKM_REGISTER_ALG
+    linuxkm_unregister_alg();
+#endif
     return;
 }
 
@@ -700,3 +733,346 @@ static int updateFipsHash(void)
 }
 
 #endif /* WOLFCRYPT_FIPS_CORE_DYNAMIC_HASH_VALUE */
+
+
+#ifdef LINUXKM_REGISTER_ALG
+#include <linux/crypto.h>
+
+PRAGMA_GCC_DIAG_PUSH;
+PRAGMA_GCC("GCC diagnostic ignored \"-Wnested-externs\"");
+PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-arith\"");
+PRAGMA_GCC("GCC diagnostic ignored \"-Wbad-function-cast\"");
+#include <crypto/internal/skcipher.h>
+PRAGMA_GCC_DIAG_POP;
+
+/* km_AesX(): wrappers to wolfcrypt wc_AesX() functions */
+
+struct km_AesCtx {
+    u8           key[AES_MAX_KEY_SIZE / 8];
+    unsigned int keylen;
+    Aes          aes;
+};
+
+static int km_SkAesInit(struct crypto_skcipher *tfm)
+{
+    int                      err = 0;
+    struct km_AesCtx *       ctx = NULL;
+
+    ctx = crypto_skcipher_ctx(tfm);
+
+    err = wc_AesInit(&ctx->aes, NULL, INVALID_DEVID);
+
+    if (err != 0) {
+        pr_err("error: km_SkAesInit failed: %d\n", err);
+        return err;
+    }
+
+    return 0;
+}
+
+static void km_SkAesExit(struct crypto_skcipher *tfm)
+{
+    struct km_AesCtx *       ctx = NULL;
+
+    ctx = crypto_skcipher_ctx(tfm);
+
+    wc_AesFree(&ctx->aes);
+}
+
+static int km_SkAesSetKey(struct crypto_skcipher *tfm, const u8 *in_key,
+                          unsigned int key_len)
+{
+    struct km_AesCtx * ctx = NULL;
+    int                err = 0;
+
+    ctx = crypto_skcipher_ctx(tfm);
+
+    err = wc_AesSetKey(&ctx->aes, in_key, key_len, NULL, 0);
+
+    if (err != 0) {
+        pr_err("error: km_SkAesSetKey failed: %d\n", err);
+        return err;
+    }
+
+    XMEMCPY(ctx->key, in_key, key_len);
+    ctx->keylen = key_len;
+
+    pr_info("info: SkAesSetKey: ctx->keylen: %d\n", ctx->keylen);
+
+    return 0;
+}
+
+static int km_CbcAesEncrypt(struct skcipher_request *req)
+{
+    struct crypto_skcipher * tfm = NULL;
+    struct km_AesCtx *       ctx = NULL;
+    struct skcipher_walk     walk;
+    unsigned int             nbytes = 0;;
+    int                      err = 0;;
+
+    tfm = crypto_skcipher_reqtfm(req);
+    ctx = crypto_skcipher_ctx(tfm);
+
+    err = skcipher_walk_virt(&walk, req, false);
+
+    while ((nbytes = walk.nbytes)) {
+        pr_info("info: walk.nbytes: %d\n", walk.nbytes);
+        pr_info("info: ctx->keylen: %d\n", ctx->keylen);
+
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv, AES_ENCRYPTION);
+
+        if (err) {
+            pr_err("wc_AesSetKey failed: %d\n", err);
+            return err;
+        }
+
+        err = wc_AesCbcEncrypt(&ctx->aes, walk.dst.virt.addr, walk.src.virt.addr,
+                               nbytes);
+
+        if (err) {
+            pr_err("wc_AesCbcEncrypt failed %d\n", err);
+            return err;
+        }
+
+        err = skcipher_walk_done(&walk, walk.nbytes - nbytes);
+    }
+
+    return err;
+}
+
+static int km_CbcAesDecrypt(struct skcipher_request *req)
+{
+    struct crypto_skcipher * tfm = NULL;
+    struct km_AesCtx *       ctx = NULL;
+    struct skcipher_walk     walk;
+    unsigned int             nbytes = 0;;
+    int                      err = 0;;
+
+    tfm = crypto_skcipher_reqtfm(req);
+    ctx = crypto_skcipher_ctx(tfm);
+
+    err = skcipher_walk_virt(&walk, req, false);
+
+    while ((nbytes = walk.nbytes)) {
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv, AES_DECRYPTION);
+
+        if (err) {
+            pr_err("wc_AesSetKey failed");
+            return err;
+        }
+
+        err = wc_AesCbcDecrypt(&ctx->aes, walk.dst.virt.addr, walk.src.virt.addr,
+                               nbytes);
+
+        if (err) {
+            pr_err("wc_AesCbcDecrypt failed");
+            return err;
+        }
+
+        err = skcipher_walk_done(&walk, walk.nbytes - nbytes);
+    }
+
+    return err;
+}
+
+static struct skcipher_alg cbcAesAlg = {
+    .base.cra_name        = "cbc(aes)",
+    .base.cra_driver_name = "cbc-aes-wolfcrypt",
+    .base.cra_priority    = 100,
+    .base.cra_blocksize   = AES_BLOCK_SIZE,
+    .base.cra_ctxsize     = sizeof(struct km_AesCtx),
+    .base.cra_module      = THIS_MODULE,
+    .init                 = km_SkAesInit,
+    .exit                 = km_SkAesExit,
+    .min_keysize          = (128 / 8),
+    .max_keysize          = (AES_MAX_KEY_SIZE / 8),
+    .ivsize               = AES_BLOCK_SIZE,
+    .setkey               = km_SkAesSetKey,
+    .encrypt              = km_CbcAesEncrypt,
+    .decrypt              = km_CbcAesDecrypt,
+};
+
+static int linuxkm_register_alg(void)
+{
+    int ret = 0;
+
+    ret =  crypto_register_skcipher(&cbcAesAlg);
+
+    if (ret) {
+        pr_err("crypto_register_skcipher failed with return code %d.\n", ret);
+        return ret;
+    }
+
+    /* todo: crypto self test. Test crypto api against our own,
+     * verify matches. */
+
+    return 0;
+}
+
+static void linuxkm_unregister_alg(void)
+{
+    crypto_unregister_skcipher(&cbcAesAlg);
+}
+
+#ifdef LINUXKM_TEST_ALG
+/* Given registered wolfcrypt kernel crypto, sanity test against
+ * direct wolfcrypt calls. */
+
+PRAGMA_GCC_DIAG_PUSH;
+PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-arith\"");
+PRAGMA_GCC("GCC diagnostic ignored \"-Wunused-parameter\"");
+#include <linux/scatterlist.h>
+PRAGMA_GCC_DIAG_POP;
+
+static int linuxkm_test_alg(void)
+{
+    struct crypto_skcipher * tfm = NULL;
+    struct skcipher_request *req = NULL;
+    struct scatterlist       src, dst;
+    int     ret = 1;
+    Aes     aes;
+    byte    key32[] =
+    {
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+        0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
+        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+        0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
+    };
+    byte    vector[] = /* Now is the time for all good men w/o trailing 0 */
+    {
+        0x4e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+        0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20,
+        0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
+        0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
+    };
+    byte    iv[]    = "1234567890abcdef";
+    byte    enc[sizeof(vector)];
+    byte    dec[sizeof(vector)];
+    u8 *    enc2 = NULL;
+    u8 *    dec2 = NULL;
+
+    XMEMSET(enc, 0, sizeof(enc));
+    XMEMSET(dec, 0, sizeof(enc));
+
+    ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
+    if (ret) {
+        pr_err("wolfcrypt wc_AesInit failed with return code %d.\n", ret);
+        return -1;
+    }
+
+    ret = wc_AesSetKey(&aes, key32, AES_BLOCK_SIZE * 2, iv, AES_ENCRYPTION);
+    if (ret) {
+        pr_err("wolfcrypt wc_AesInit failed with return code %d.\n", ret);
+        return -1;
+    }
+
+    ret = wc_AesCbcEncrypt(&aes, enc, vector, sizeof(vector));
+    if (ret) {
+        pr_err("wolfcrypt wc_AesCbcEncrypt failed with return code %d.\n", ret);
+        return -1;
+    }
+
+    /* Re init for decrypt and set flag. */
+    wc_AesFree(&aes);
+    ret = wc_AesSetKey(&aes, key32, AES_BLOCK_SIZE * 2, iv, AES_DECRYPTION);
+    if (ret) {
+        pr_err("wolfcrypt wc_AesSetKey failed with return code %d.\n", ret);
+        return -1;
+    }
+
+    ret = wc_AesCbcDecrypt(&aes, dec, enc, sizeof(vector));
+    if (ret) {
+        pr_err("wolfcrypt wc_AesCbcDecrypt failed with return code %d.\n", ret);
+        return -1;
+    }
+
+    ret = XMEMCMP(vector, dec, sizeof(vector));
+    if (ret) {
+        pr_err("error: vector and dec no not match: %d\n", ret);
+        return -1;
+    }
+
+    /* now the kernel crypto part */
+    enc2 = kmalloc(sizeof(vector), GFP_KERNEL);
+    if (!enc2) {
+        pr_err("error: kmalloc failed\n");
+        goto test_alg_end;
+    }
+
+    dec2 = kmalloc(sizeof(vector), GFP_KERNEL);
+    if (!dec2) {
+        pr_err("error: kmalloc failed\n");
+        goto test_alg_end;
+    }
+
+    memcpy(dec2, vector, sizeof(vector));
+
+    tfm = crypto_alloc_skcipher("cbc-aes-wolfcrypt", 0, 0);
+
+    if (IS_ERR(tfm)) {
+        pr_err("error: allocating AES skcipher algorithm %s failed\n",
+               "cbc-aes-wolfcrypt");
+        goto test_alg_end;
+    }
+    else {
+        pr_info("info: allocate AES skcipher algorithm %s: good\n",
+                "cbc-aes-wolfcrypt");
+    }
+
+    ret = crypto_skcipher_setkey(tfm, key32, AES_BLOCK_SIZE * 2);
+
+    if (ret) {
+        pr_err("error: crypto_skcipher_setkey returned: %d\n", ret);
+        goto test_alg_end;
+    }
+    else {
+        pr_info("info: crypto_skcipher_setkey %s: good\n",
+                "cbc-aes-wolfcrypt");
+    }
+
+    req = skcipher_request_alloc(tfm, GFP_KERNEL);
+    if (!req) {
+        pr_err("error: allocating AES skcipher request %s failed\n",
+               "cbc-aes-wolfcrypt");
+        goto test_alg_end;
+    }
+    else {
+        pr_info("info: allocate AES skcipher request %s: good\n",
+                "cbc-aes-wolfcrypt");
+    }
+
+    sg_init_one(&src, dec2, sizeof(vector));
+    sg_init_one(&dst, enc2, sizeof(vector));
+
+    skcipher_request_set_crypt(req, &src, &dst, sizeof(vector), iv);
+
+    ret = crypto_skcipher_encrypt(req);
+
+    if (ret) {
+        pr_err("error: crypto_skcipher_encrypt returned: %d\n", ret);
+        goto test_alg_end;
+    }
+    else {
+        pr_info("info: crypto_skcipher_encrypt %s: good\n",
+                "cbc-aes-wolfcrypt");
+    }
+
+    ret = XMEMCMP(enc, enc2, sizeof(vector));
+    if (ret) {
+        pr_err("error: enc and enc2 do not match: %d\n", ret);
+    }
+    else {
+        pr_info("info: crypto api and wolfcrypt match\n");
+    }
+
+test_alg_end:
+
+    if (enc2) { kfree(enc2); enc2 = NULL; }
+    if (dec2) { kfree(dec2); dec2 = NULL; }
+    if (req) { skcipher_request_free(req); req = NULL; }
+    if (tfm) { crypto_free_skcipher(tfm); tfm = NULL; }
+
+    return ret;
+}
+#endif
+#endif /* LINUXKM_REGISTER_ALG */
