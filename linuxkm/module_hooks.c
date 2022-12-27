@@ -115,6 +115,7 @@ static int updateFipsHash(void);
 
 
 #ifdef LINUXKM_REGISTER_ALG
+#define WOLFKM_CBC_DRIVER "cbc-aes-wolfcrypt"
 static int  linuxkm_register_alg(void);
 static void linuxkm_unregister_alg(void);
     #ifdef LINUXKM_TEST_ALG
@@ -766,6 +767,9 @@ static int km_SkAesInit(struct crypto_skcipher *tfm)
         pr_err("error: km_SkAesInit failed: %d\n", err);
         return err;
     }
+    else {
+        pr_info("info: km_SkAesInit good\n");
+    }
 
     return 0;
 }
@@ -877,7 +881,7 @@ static int km_CbcAesDecrypt(struct skcipher_request *req)
 
 static struct skcipher_alg cbcAesAlg = {
     .base.cra_name        = "cbc(aes)",
-    .base.cra_driver_name = "cbc-aes-wolfcrypt",
+    .base.cra_driver_name = WOLFKM_CBC_DRIVER,
     .base.cra_priority    = 100,
     .base.cra_blocksize   = AES_BLOCK_SIZE,
     .base.cra_ctxsize     = sizeof(struct km_AesCtx),
@@ -1007,16 +1011,16 @@ static int linuxkm_test_alg(void)
 
     memcpy(dec2, vector, sizeof(vector));
 
-    tfm = crypto_alloc_skcipher("cbc-aes-wolfcrypt", 0, 0);
+    tfm = crypto_alloc_skcipher(WOLFKM_CBC_DRIVER, 0, 0);
 
     if (IS_ERR(tfm)) {
         pr_err("error: allocating AES skcipher algorithm %s failed\n",
-               "cbc-aes-wolfcrypt");
+               WOLFKM_CBC_DRIVER);
         goto test_alg_end;
     }
     else {
         pr_info("info: allocate AES skcipher algorithm %s: good\n",
-                "cbc-aes-wolfcrypt");
+                WOLFKM_CBC_DRIVER);
     }
 
     ret = crypto_skcipher_setkey(tfm, key32, AES_BLOCK_SIZE * 2);
@@ -1027,18 +1031,18 @@ static int linuxkm_test_alg(void)
     }
     else {
         pr_info("info: crypto_skcipher_setkey %s: good\n",
-                "cbc-aes-wolfcrypt");
+                WOLFKM_CBC_DRIVER);
     }
 
     req = skcipher_request_alloc(tfm, GFP_KERNEL);
     if (!req) {
         pr_err("error: allocating AES skcipher request %s failed\n",
-               "cbc-aes-wolfcrypt");
+               WOLFKM_CBC_DRIVER);
         goto test_alg_end;
     }
     else {
         pr_info("info: allocate AES skcipher request %s: good\n",
-                "cbc-aes-wolfcrypt");
+                WOLFKM_CBC_DRIVER);
     }
 
     sg_init_one(&src, dec2, sizeof(vector));
@@ -1054,7 +1058,7 @@ static int linuxkm_test_alg(void)
     }
     else {
         pr_info("info: crypto_skcipher_encrypt %s: good\n",
-                "cbc-aes-wolfcrypt");
+                WOLFKM_CBC_DRIVER);
     }
 
     ret = XMEMCMP(enc, enc2, sizeof(vector));
@@ -1062,7 +1066,34 @@ static int linuxkm_test_alg(void)
         pr_err("error: enc and enc2 do not match: %d\n", ret);
     }
     else {
-        pr_info("info: crypto api and wolfcrypt match\n");
+        pr_info("info: crypto api and wolfcrypt match: %s\n",
+                WOLFKM_CBC_DRIVER);
+    }
+
+    memset(dec2, 0, sizeof(vector));
+    sg_init_one(&src, enc2, sizeof(vector));
+    sg_init_one(&dst, dec2, sizeof(vector));
+
+    skcipher_request_set_crypt(req, &src, &dst, sizeof(vector), iv);
+
+    ret = crypto_skcipher_decrypt(req);
+
+    if (ret) {
+        pr_err("error: crypto_skcipher_decrypt returned: %d\n", ret);
+        goto test_alg_end;
+    }
+    else {
+        pr_info("info: crypto_skcipher_decrypt %s: good\n",
+                WOLFKM_CBC_DRIVER);
+    }
+
+    ret = XMEMCMP(dec, dec2, sizeof(vector));
+    if (ret) {
+        pr_err("error: dec and dec2 do not match: %d\n", ret);
+    }
+    else {
+        pr_info("info: crypto api and wolfcrypt match: %s\n",
+                WOLFKM_CBC_DRIVER);
     }
 
 test_alg_end:
