@@ -811,8 +811,8 @@ static int km_CbcAesEncrypt(struct skcipher_request *req)
     struct crypto_skcipher * tfm = NULL;
     struct km_AesCtx *       ctx = NULL;
     struct skcipher_walk     walk;
-    unsigned int             nbytes = 0;;
-    int                      err = 0;;
+    unsigned int             nbytes = 0;
+    int                      err = 0;
 
     tfm = crypto_skcipher_reqtfm(req);
     ctx = crypto_skcipher_ctx(tfm);
@@ -849,8 +849,8 @@ static int km_CbcAesDecrypt(struct skcipher_request *req)
     struct crypto_skcipher * tfm = NULL;
     struct km_AesCtx *       ctx = NULL;
     struct skcipher_walk     walk;
-    unsigned int             nbytes = 0;;
-    int                      err = 0;;
+    unsigned int             nbytes = 0;
+    int                      err = 0;
 
     tfm = crypto_skcipher_reqtfm(req);
     ctx = crypto_skcipher_ctx(tfm);
