@@ -116,6 +116,7 @@ static int updateFipsHash(void);
 
 #ifdef LINUXKM_REGISTER_ALG
 #define WOLFKM_CBC_DRIVER "cbc-aes-wolfcrypt"
+#define WOLFKM_GCM_DRIVER "gcm-aes-wolfcrypt"
 static int  linuxkm_register_alg(void);
 static void linuxkm_unregister_alg(void);
     #ifdef LINUXKM_TEST_ALG
@@ -743,70 +744,88 @@ PRAGMA_GCC_DIAG_PUSH;
 PRAGMA_GCC("GCC diagnostic ignored \"-Wnested-externs\"");
 PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-arith\"");
 PRAGMA_GCC("GCC diagnostic ignored \"-Wbad-function-cast\"");
+#include <crypto/internal/aead.h>
 #include <crypto/internal/skcipher.h>
 PRAGMA_GCC_DIAG_POP;
 
-/* km_AesX(): wrappers to wolfcrypt wc_AesX() functions */
-
 struct km_AesCtx {
+    Aes          aes;
     u8           key[AES_MAX_KEY_SIZE / 8];
     unsigned int keylen;
-    Aes          aes;
+    unsigned int authTagSz;
 };
 
-static int km_SkAesInit(struct crypto_skcipher *tfm)
+/* km_AesX(): wrappers to wolfcrypt wc_AesX() functions */
+
+static inline void km_ForceZero(struct km_AesCtx * ctx)
 {
-    int                      err = 0;
-    struct km_AesCtx *       ctx = NULL;
+    /* using kernel force memzero because this is kernel code */
+    memzero_explicit(ctx->key, sizeof(ctx->key));
+    ctx->keylen = 0;
+    ctx->authTagSz = 0;
+}
 
-    ctx = crypto_skcipher_ctx(tfm);
-
-    err = wc_AesInit(&ctx->aes, NULL, INVALID_DEVID);
+static int km_AesInitCommon(struct km_AesCtx * ctx, const char * name)
+{
+    int err = wc_AesInit(&ctx->aes, NULL, INVALID_DEVID);
 
     if (err != 0) {
-        pr_err("error: km_SkAesInit failed: %d\n", err);
+        pr_err("error: km_AesInitCommon %s failed: %d\n", name, err);
         return err;
     }
     else {
-        pr_info("info: km_SkAesInit good\n");
+        pr_info("info: km_AesInitCommon %s good\n", name);
+        return 0;
     }
-
-    return 0;
 }
 
-static void km_SkAesExit(struct crypto_skcipher *tfm)
+static void km_AesExitCommon(struct km_AesCtx * ctx, const char * name)
 {
-    struct km_AesCtx *       ctx = NULL;
-
-    ctx = crypto_skcipher_ctx(tfm);
-
     wc_AesFree(&ctx->aes);
+    km_ForceZero(ctx);
+    pr_info("info: km_AesExitCommon %s\n", name);
 }
 
-static int km_SkAesSetKey(struct crypto_skcipher *tfm, const u8 *in_key,
-                          unsigned int key_len)
+static int km_AesSetKeyCommon(struct km_AesCtx * ctx, const u8 *in_key,
+                              unsigned int key_len, const char * name)
 {
-    struct km_AesCtx * ctx = NULL;
-    int                err = 0;
-
-    ctx = crypto_skcipher_ctx(tfm);
-
-    err = wc_AesSetKey(&ctx->aes, in_key, key_len, NULL, 0);
+    int err = wc_AesSetKey(&ctx->aes, in_key, key_len, NULL, 0);
 
     if (err != 0) {
-        pr_err("error: km_SkAesSetKey failed: %d\n", err);
+        pr_err("error: km_AesSetKeyCommon %s failed: %d\n", name, err);
         return err;
     }
 
     XMEMCPY(ctx->key, in_key, key_len);
     ctx->keylen = key_len;
 
-    pr_info("info: SkAesSetKey: ctx->keylen: %d\n", ctx->keylen);
+    pr_info("info: km_AesSetKeyCommon %s: ctx->keylen: %d\n", name,
+            ctx->keylen);
 
     return 0;
 }
 
-static int km_CbcAesEncrypt(struct skcipher_request *req)
+static int km_AesInit(struct crypto_skcipher *tfm)
+{
+    struct km_AesCtx * ctx = crypto_skcipher_ctx(tfm);
+
+    return km_AesInitCommon(ctx, WOLFKM_CBC_DRIVER);
+}
+
+static void km_AesExit(struct crypto_skcipher *tfm)
+{
+    struct km_AesCtx * ctx = crypto_skcipher_ctx(tfm);
+    km_AesExitCommon(ctx, WOLFKM_CBC_DRIVER);
+}
+
+static int km_AesSetKey(struct crypto_skcipher *tfm, const u8 *in_key,
+                          unsigned int key_len)
+{
+    struct km_AesCtx * ctx = crypto_skcipher_ctx(tfm);
+    return km_AesSetKeyCommon(ctx, in_key, key_len, WOLFKM_CBC_DRIVER);
+}
+
+static int km_AesCbcEncrypt(struct skcipher_request *req)
 {
     struct crypto_skcipher * tfm = NULL;
     struct km_AesCtx *       ctx = NULL;
@@ -844,7 +863,7 @@ static int km_CbcAesEncrypt(struct skcipher_request *req)
     return err;
 }
 
-static int km_CbcAesDecrypt(struct skcipher_request *req)
+static int km_AesCbcDecrypt(struct skcipher_request *req)
 {
     struct crypto_skcipher * tfm = NULL;
     struct km_AesCtx *       ctx = NULL;
@@ -879,6 +898,55 @@ static int km_CbcAesDecrypt(struct skcipher_request *req)
     return err;
 }
 
+static int km_AesGcmInit(struct crypto_aead * tfm)
+{
+    struct km_AesCtx * ctx = crypto_aead_ctx(tfm);
+    km_ForceZero(ctx);
+    return km_AesInitCommon(ctx, WOLFKM_GCM_DRIVER);
+}
+
+static void km_AesGcmExit(struct crypto_aead * tfm)
+{
+    struct km_AesCtx * ctx = crypto_aead_ctx(tfm);
+    km_AesExitCommon(ctx, WOLFKM_GCM_DRIVER);
+}
+
+static int km_AesGcmSetKey(struct crypto_aead *tfm, const u8 *in_key,
+                           unsigned int key_len)
+{
+    struct km_AesCtx * ctx = crypto_aead_ctx(tfm);
+    return km_AesSetKeyCommon(ctx, in_key, key_len, WOLFKM_GCM_DRIVER);
+}
+
+static int km_AesGcmSetAuthsize(struct crypto_aead *tfm, unsigned int authsize)
+{
+    struct km_AesCtx * ctx = NULL;
+
+    if (authsize > AES_BLOCK_SIZE ||
+        authsize < WOLFSSL_MIN_AUTH_TAG_SZ) {
+        pr_err("error: authsize invalid size: %d\n", authsize);
+        return -EINVAL;
+    }
+
+    ctx = crypto_aead_ctx(tfm);
+    ctx->authTagSz = authsize;
+
+    return 0;
+}
+
+
+static int km_AesGcmEncrypt(struct aead_request *req)
+{
+    (void) req;
+    return 0;
+}
+
+static int km_AesGcmDecrypt(struct aead_request *req)
+{
+    (void) req;
+    return 0;
+}
+
 static struct skcipher_alg cbcAesAlg = {
     .base.cra_name        = "cbc(aes)",
     .base.cra_driver_name = WOLFKM_CBC_DRIVER,
@@ -886,14 +954,32 @@ static struct skcipher_alg cbcAesAlg = {
     .base.cra_blocksize   = AES_BLOCK_SIZE,
     .base.cra_ctxsize     = sizeof(struct km_AesCtx),
     .base.cra_module      = THIS_MODULE,
-    .init                 = km_SkAesInit,
-    .exit                 = km_SkAesExit,
+    .init                 = km_AesInit,
+    .exit                 = km_AesExit,
     .min_keysize          = (128 / 8),
     .max_keysize          = (AES_MAX_KEY_SIZE / 8),
     .ivsize               = AES_BLOCK_SIZE,
-    .setkey               = km_SkAesSetKey,
-    .encrypt              = km_CbcAesEncrypt,
-    .decrypt              = km_CbcAesDecrypt,
+    .setkey               = km_AesSetKey,
+    .encrypt              = km_AesCbcEncrypt,
+    .decrypt              = km_AesCbcDecrypt,
+};
+
+static struct aead_alg gcmAesAead = {
+    .base.cra_name        = "gcm(aes)",
+    .base.cra_driver_name = WOLFKM_GCM_DRIVER,
+    .base.cra_priority    = 100,
+    .base.cra_blocksize   = AES_BLOCK_SIZE,
+    .base.cra_ctxsize     = sizeof(struct km_AesCtx),
+    .base.cra_module      = THIS_MODULE,
+    .init                 = km_AesGcmInit,
+    .exit                 = km_AesGcmExit,
+    .setkey               = km_AesGcmSetKey,
+    .setauthsize          = km_AesGcmSetAuthsize,
+    .encrypt              = km_AesGcmEncrypt,
+    .decrypt              = km_AesGcmDecrypt,
+    .ivsize               = AES_BLOCK_SIZE,
+    .maxauthsize          = AES_BLOCK_SIZE,
+    .chunksize            = AES_BLOCK_SIZE,
 };
 
 static int linuxkm_register_alg(void)
@@ -907,8 +993,12 @@ static int linuxkm_register_alg(void)
         return ret;
     }
 
-    /* todo: crypto self test. Test crypto api against our own,
-     * verify matches. */
+    ret =  crypto_register_aead(&gcmAesAead);
+
+    if (ret) {
+        pr_err("crypto_register_aead failed with return code %d.\n", ret);
+        return ret;
+    }
 
     return 0;
 }
@@ -916,6 +1006,7 @@ static int linuxkm_register_alg(void)
 static void linuxkm_unregister_alg(void)
 {
     crypto_unregister_skcipher(&cbcAesAlg);
+    crypto_unregister_aead(&gcmAesAead);
 }
 
 #ifdef LINUXKM_TEST_ALG
@@ -930,9 +1021,9 @@ PRAGMA_GCC_DIAG_POP;
 
 static int linuxkm_test_alg(void)
 {
-    struct crypto_skcipher * tfm = NULL;
-    struct skcipher_request *req = NULL;
-    struct scatterlist       src, dst;
+    struct crypto_skcipher *  tfm = NULL;
+    struct skcipher_request * req = NULL;
+    struct scatterlist        src, dst;
     int     ret = 1;
     Aes     aes;
     byte    key32[] =
