@@ -115,8 +115,11 @@ static int updateFipsHash(void);
 
 
 #ifdef LINUXKM_REGISTER_ALG
+#define WOLFKM_CBC_NAME   "cbc(aes)"
+#define WOLFKM_GCM_NAME   "gcm(aes)"
 #define WOLFKM_CBC_DRIVER "cbc-aes-wolfcrypt"
 #define WOLFKM_GCM_DRIVER "gcm-aes-wolfcrypt"
+#define WOLFKM_ALG_PRIORITY (100)
 static int  linuxkm_register_alg(void);
 static void linuxkm_unregister_alg(void);
     #ifdef LINUXKM_TEST_ALG
@@ -743,40 +746,42 @@ static int updateFipsHash(void)
 PRAGMA_GCC_DIAG_PUSH;
 PRAGMA_GCC("GCC diagnostic ignored \"-Wnested-externs\"");
 PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-arith\"");
+PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-sign\"");
 PRAGMA_GCC("GCC diagnostic ignored \"-Wbad-function-cast\"");
+PRAGMA_GCC("GCC diagnostic ignored \"-Wunused-parameter\"");
+#include <linux/scatterlist.h>
+#include <crypto/scatterwalk.h>
 #include <crypto/internal/aead.h>
 #include <crypto/internal/skcipher.h>
 PRAGMA_GCC_DIAG_POP;
+
+/* km_AesX(): wrappers to wolfcrypt wc_AesX functions and
+ * structures.  */
 
 struct km_AesCtx {
     Aes          aes;
     u8           key[AES_MAX_KEY_SIZE / 8];
     unsigned int keylen;
-    unsigned int authTagSz;
 };
-
-/* km_AesX(): wrappers to wolfcrypt wc_AesX() functions */
 
 static inline void km_ForceZero(struct km_AesCtx * ctx)
 {
     /* using kernel force memzero because this is kernel code */
     memzero_explicit(ctx->key, sizeof(ctx->key));
     ctx->keylen = 0;
-    ctx->authTagSz = 0;
 }
 
 static int km_AesInitCommon(struct km_AesCtx * ctx, const char * name)
 {
     int err = wc_AesInit(&ctx->aes, NULL, INVALID_DEVID);
 
-    if (err != 0) {
+    if (unlikely(err)) {
         pr_err("error: km_AesInitCommon %s failed: %d\n", name, err);
         return err;
     }
-    else {
-        pr_info("info: km_AesInitCommon %s good\n", name);
-        return 0;
-    }
+
+    pr_info("info: km_AesInitCommon %s good\n", name);
+    return 0;
 }
 
 static void km_AesExitCommon(struct km_AesCtx * ctx, const char * name)
@@ -791,7 +796,7 @@ static int km_AesSetKeyCommon(struct km_AesCtx * ctx, const u8 *in_key,
 {
     int err = wc_AesSetKey(&ctx->aes, in_key, key_len, NULL, 0);
 
-    if (err != 0) {
+    if (unlikely(err)) {
         pr_err("error: km_AesSetKeyCommon %s failed: %d\n", name, err);
         return err;
     }
@@ -801,14 +806,12 @@ static int km_AesSetKeyCommon(struct km_AesCtx * ctx, const u8 *in_key,
 
     pr_info("info: km_AesSetKeyCommon %s: ctx->keylen: %d\n", name,
             ctx->keylen);
-
     return 0;
 }
 
 static int km_AesInit(struct crypto_skcipher *tfm)
 {
     struct km_AesCtx * ctx = crypto_skcipher_ctx(tfm);
-
     return km_AesInitCommon(ctx, WOLFKM_CBC_DRIVER);
 }
 
@@ -842,17 +845,18 @@ static int km_AesCbcEncrypt(struct skcipher_request *req)
         pr_info("info: walk.nbytes: %d\n", walk.nbytes);
         pr_info("info: ctx->keylen: %d\n", ctx->keylen);
 
-        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv, AES_ENCRYPTION);
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv,
+                           AES_ENCRYPTION);
 
-        if (err) {
+        if (unlikely(err)) {
             pr_err("wc_AesSetKey failed: %d\n", err);
             return err;
         }
 
-        err = wc_AesCbcEncrypt(&ctx->aes, walk.dst.virt.addr, walk.src.virt.addr,
-                               nbytes);
+        err = wc_AesCbcEncrypt(&ctx->aes, walk.dst.virt.addr,
+                               walk.src.virt.addr, nbytes);
 
-        if (err) {
+        if (unlikely(err)) {
             pr_err("wc_AesCbcEncrypt failed %d\n", err);
             return err;
         }
@@ -877,17 +881,18 @@ static int km_AesCbcDecrypt(struct skcipher_request *req)
     err = skcipher_walk_virt(&walk, req, false);
 
     while ((nbytes = walk.nbytes)) {
-        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv, AES_DECRYPTION);
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv,
+                           AES_DECRYPTION);
 
-        if (err) {
+        if (unlikely(err)) {
             pr_err("wc_AesSetKey failed");
             return err;
         }
 
-        err = wc_AesCbcDecrypt(&ctx->aes, walk.dst.virt.addr, walk.src.virt.addr,
-                               nbytes);
+        err = wc_AesCbcDecrypt(&ctx->aes, walk.dst.virt.addr,
+                               walk.src.virt.addr, nbytes);
 
-        if (err) {
+        if (unlikely(err)) {
             pr_err("wc_AesCbcDecrypt failed");
             return err;
         }
@@ -920,37 +925,207 @@ static int km_AesGcmSetKey(struct crypto_aead *tfm, const u8 *in_key,
 
 static int km_AesGcmSetAuthsize(struct crypto_aead *tfm, unsigned int authsize)
 {
-    struct km_AesCtx * ctx = NULL;
-
+    (void)tfm;
     if (authsize > AES_BLOCK_SIZE ||
         authsize < WOLFSSL_MIN_AUTH_TAG_SZ) {
         pr_err("error: authsize invalid size: %d\n", authsize);
         return -EINVAL;
     }
-
-    ctx = crypto_aead_ctx(tfm);
-    ctx->authTagSz = authsize;
-
     return 0;
 }
 
 
 static int km_AesGcmEncrypt(struct aead_request *req)
 {
-    (void) req;
-    return 0;
+    struct crypto_aead * tfm = NULL;
+    struct km_AesCtx *   ctx = NULL;
+    struct skcipher_walk walk;
+    struct scatter_walk  authInWalk;
+    unsigned long        authTagSz = 0;
+    unsigned long        authInSz = 0;
+    unsigned int         nbytes = 0;
+    u8                   authTag[AES_BLOCK_SIZE];
+    u8 *                 authIn = NULL;
+    u8 *                 authInMem = NULL;
+    int                  err = 0;
+
+    tfm = crypto_aead_reqtfm(req);
+    ctx = crypto_aead_ctx(tfm);
+    authTagSz = tfm->authsize;
+    authInSz = req->assoclen;
+
+    err = skcipher_walk_aead_encrypt(&walk, req, false);
+
+    if (unlikely(err)) {
+        pr_err("error: skcipher_walk_aead_encrypt: %d\n", err);
+        return -1;
+    }
+
+    /*
+     * encrypt
+     *   req->src: aad||plaintext
+     *   req->dst: aad||ciphertext||tag
+     * decrypt
+     *   req->src: aad||ciphertext||tag
+     *   req->dst: aad||plaintext, return 0 or -EBADMSG
+     * aad, plaintext and ciphertext may be empty.
+     */
+
+    if (req->src->length >= authInSz) {
+        /* All the associated data is within the first scatterlist, just
+         * map to buffer pointer. */
+        scatterwalk_start(&authInWalk, req->src);
+        authIn = scatterwalk_map(&authInWalk);
+    }
+    else {
+        /* Associated data larger than first scatterlist, must alloc buffer. */
+        authInMem = kmalloc(authInSz, GFP_KERNEL);
+
+        if (unlikely(!authInMem)) {
+            pr_err("error: kmalloc(%ld, GFP_KERNEL) failed\n", authInSz);
+            return -ENOMEM;
+        }
+
+        authIn = authInMem;
+        scatterwalk_map_and_copy(authIn, req->src, 0, authInSz, 0);
+    }
+
+    err = skcipher_walk_aead_encrypt(&walk, req, false);
+
+    while ((nbytes = walk.nbytes)) {
+        pr_info("info: walk.nbytes: %d\n", walk.nbytes);
+        pr_info("info: ctx->keylen: %d\n", ctx->keylen);
+
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv,
+                           AES_ENCRYPTION);
+
+        if (unlikely(err)) {
+            pr_err("wc_AesSetKey failed: %d\n", err);
+            return err;
+        }
+
+        err = wc_AesGcmEncrypt(&ctx->aes,
+                               walk.dst.virt.addr, walk.src.virt.addr,
+                               nbytes, walk.iv, walk.ivsize,
+                               authTag, authTagSz, authIn, authInSz);
+
+        if (unlikely(err)) {
+            pr_err("wc_AesCbcEncrypt failed %d\n", err);
+            return err;
+        }
+
+        err = skcipher_walk_done(&walk, walk.nbytes - nbytes);
+    }
+
+    /* Now copy the auth tag into request scatterlist. */
+    scatterwalk_map_and_copy(authTag, req->dst,
+                             req->assoclen + req->cryptlen,
+                             authTagSz, 1);
+
+    return err;
 }
 
 static int km_AesGcmDecrypt(struct aead_request *req)
 {
-    (void) req;
-    return 0;
+    struct crypto_aead * tfm = NULL;
+    struct km_AesCtx *   ctx = NULL;
+    struct skcipher_walk walk;
+    struct scatter_walk  authInWalk;
+    unsigned long        authTagSz = 0;
+    unsigned long        authInSz = 0;
+    unsigned int         nbytes = 0;
+    u8                   authTag[AES_BLOCK_SIZE];
+    u8                   origAuthTag[AES_BLOCK_SIZE];
+    u8 *                 authIn = NULL;
+    u8 *                 authInMem = NULL;
+    int                  err = 0;
+
+    tfm = crypto_aead_reqtfm(req);
+    ctx = crypto_aead_ctx(tfm);
+    authTagSz = tfm->authsize;
+    authInSz = req->assoclen;
+
+    err = skcipher_walk_aead_encrypt(&walk, req, false);
+
+    if (unlikely(err)) {
+        pr_err("error: skcipher_walk_aead_encrypt: %d\n", err);
+        return -1;
+    }
+
+    /*
+     * encrypt
+     *   req->src: aad||plaintext
+     *   req->dst: aad||ciphertext||tag
+     * decrypt
+     *   req->src: aad||ciphertext||tag
+     *   req->dst: aad||plaintext, return 0 or -EBADMSG
+     * aad, plaintext and ciphertext may be empty.
+     */
+
+    if (req->src->length >= authInSz) {
+        /* All the associated data is within the first scatterlist, just
+         * map to buffer pointer. */
+        scatterwalk_start(&authInWalk, req->src);
+        authIn = scatterwalk_map(&authInWalk);
+    }
+    else {
+        /* Associated data larger than first scatterlist, must alloc buffer. */
+        authInMem = kmalloc(authInSz, GFP_KERNEL);
+
+        if (unlikely(!authInMem)) {
+            pr_err("error: kmalloc(%ld, GFP_KERNEL) failed\n", authInSz);
+            return -ENOMEM;
+        }
+
+        authIn = authInMem;
+        scatterwalk_map_and_copy(authIn, req->src, 0, authInSz, 0);
+    }
+
+    err = skcipher_walk_aead_decrypt(&walk, req, false);
+
+    while ((nbytes = walk.nbytes)) {
+        pr_info("info: walk.nbytes: %d\n", walk.nbytes);
+        pr_info("info: ctx->keylen: %d\n", ctx->keylen);
+
+        err = wc_AesSetKey(&ctx->aes, ctx->key, ctx->keylen, walk.iv,
+                           AES_DECRYPTION);
+
+        if (unlikely(err)) {
+            pr_err("wc_AesSetKey failed: %d\n", err);
+            return err;
+        }
+
+        err = wc_AesGcmDecrypt(&ctx->aes,
+                               walk.dst.virt.addr, walk.src.virt.addr,
+                               nbytes, walk.iv, walk.ivsize,
+                               authTag, authTagSz, authIn, authInSz);
+
+        if (unlikely(err)) {
+            pr_err("wc_AesCbcEncrypt failed %d\n", err);
+            return err;
+        }
+
+        err = skcipher_walk_done(&walk, walk.nbytes - nbytes);
+    }
+
+    /* Copy out original auth tag from req->src. */
+    scatterwalk_map_and_copy(origAuthTag, req->src,
+                             req->assoclen + req->cryptlen - authTagSz,
+                             authTagSz, 0);
+
+    /* Compare against generated tag. */
+    if (crypto_memneq(origAuthTag, authTag, authTagSz)) {
+        memzero_explicit(authTag, authTagSz);
+        return -EBADMSG;
+    }
+
+    return err;
 }
 
 static struct skcipher_alg cbcAesAlg = {
-    .base.cra_name        = "cbc(aes)",
+    .base.cra_name        = WOLFKM_CBC_NAME,
     .base.cra_driver_name = WOLFKM_CBC_DRIVER,
-    .base.cra_priority    = 100,
+    .base.cra_priority    = WOLFKM_ALG_PRIORITY,
     .base.cra_blocksize   = AES_BLOCK_SIZE,
     .base.cra_ctxsize     = sizeof(struct km_AesCtx),
     .base.cra_module      = THIS_MODULE,
@@ -965,9 +1140,9 @@ static struct skcipher_alg cbcAesAlg = {
 };
 
 static struct aead_alg gcmAesAead = {
-    .base.cra_name        = "gcm(aes)",
+    .base.cra_name        = WOLFKM_GCM_NAME,
     .base.cra_driver_name = WOLFKM_GCM_DRIVER,
-    .base.cra_priority    = 100,
+    .base.cra_priority    = WOLFKM_ALG_PRIORITY,
     .base.cra_blocksize   = AES_BLOCK_SIZE,
     .base.cra_ctxsize     = sizeof(struct km_AesCtx),
     .base.cra_module      = THIS_MODULE,
@@ -1013,12 +1188,6 @@ static void linuxkm_unregister_alg(void)
 /* Given registered wolfcrypt kernel crypto, sanity test against
  * direct wolfcrypt calls. */
 
-PRAGMA_GCC_DIAG_PUSH;
-PRAGMA_GCC("GCC diagnostic ignored \"-Wpointer-arith\"");
-PRAGMA_GCC("GCC diagnostic ignored \"-Wunused-parameter\"");
-#include <linux/scatterlist.h>
-PRAGMA_GCC_DIAG_POP;
-
 static int linuxkm_test_alg(void)
 {
     struct crypto_skcipher *  tfm = NULL;
@@ -1057,13 +1226,13 @@ static int linuxkm_test_alg(void)
 
     ret = wc_AesSetKey(&aes, key32, AES_BLOCK_SIZE * 2, iv, AES_ENCRYPTION);
     if (ret) {
-        pr_err("wolfcrypt wc_AesInit failed with return code %d.\n", ret);
+        pr_err("wolfcrypt wc_AesInit failed with return code %d\n", ret);
         return -1;
     }
 
     ret = wc_AesCbcEncrypt(&aes, enc, vector, sizeof(vector));
     if (ret) {
-        pr_err("wolfcrypt wc_AesCbcEncrypt failed with return code %d.\n", ret);
+        pr_err("wolfcrypt wc_AesCbcEncrypt failed with return code %d\n", ret);
         return -1;
     }
 
@@ -1077,7 +1246,7 @@ static int linuxkm_test_alg(void)
 
     ret = wc_AesCbcDecrypt(&aes, dec, enc, sizeof(vector));
     if (ret) {
-        pr_err("wolfcrypt wc_AesCbcDecrypt failed with return code %d.\n", ret);
+        pr_err("wolfcrypt wc_AesCbcDecrypt failed with return code %d\n", ret);
         return -1;
     }
 
