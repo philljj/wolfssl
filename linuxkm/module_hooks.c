@@ -951,7 +951,6 @@ static int km_AesGcmEncrypt(struct aead_request *req)
 
     tfm = crypto_aead_reqtfm(req);
     ctx = crypto_aead_ctx(tfm);
-
     assocLeft = req->assoclen;
     cryptLeft = req->cryptlen;
 
@@ -1015,7 +1014,7 @@ static int km_AesGcmEncrypt(struct aead_request *req)
         err = skcipher_walk_done(&walk, nbytes);
     }
 
-    err = wc_AesGcmEncryptFinal(&ctx->aes, authTag, AES_BLOCK_SIZE);
+    err = wc_AesGcmEncryptFinal(&ctx->aes, authTag, tfm->authsize);
     if (unlikely(err)) {
         pr_err("error: wc_AesGcmEncryptFinal failed with return code %d\n", err);
         return err;
@@ -1036,7 +1035,6 @@ static int km_AesGcmDecrypt(struct aead_request *req)
     struct skcipher_walk walk;
     struct scatter_walk  assocSgWalk;
     unsigned int         nbytes = 0;
-    u8                   authTag[AES_BLOCK_SIZE];
     u8                   origAuthTag[AES_BLOCK_SIZE];
     int                  err = 0;
     unsigned int         assocLeft = 0;
@@ -1045,15 +1043,19 @@ static int km_AesGcmDecrypt(struct aead_request *req)
 
     tfm = crypto_aead_reqtfm(req);
     ctx = crypto_aead_ctx(tfm);
-
     assocLeft = req->assoclen;
     cryptLeft = req->cryptlen - tfm->authsize;
 
+    /* Copy out original auth tag from req->src. */
+    scatterwalk_map_and_copy(origAuthTag, req->src,
+                             req->assoclen + req->cryptlen - tfm->authsize,
+                             tfm->authsize, 0);
+
     scatterwalk_start(&assocSgWalk, req->src);
 
-    err = skcipher_walk_aead_encrypt(&walk, req, false);
+    err = skcipher_walk_aead_decrypt(&walk, req, false);
     if (unlikely(err)) {
-        pr_err("error: skcipher_walk_aead_encrypt: %d\n", err);
+        pr_err("error: skcipher_walk_aead_decrypt: %d\n", err);
         return -1;
     }
 
@@ -1109,21 +1111,16 @@ static int km_AesGcmDecrypt(struct aead_request *req)
         err = skcipher_walk_done(&walk, nbytes);
     }
 
-    err = wc_AesGcmDecryptFinal(&ctx->aes, authTag, AES_BLOCK_SIZE);
+    err = wc_AesGcmDecryptFinal(&ctx->aes, origAuthTag, tfm->authsize);
     if (unlikely(err)) {
         pr_err("error: wc_AesGcmDecryptFinal failed with return code %d\n", err);
-        return err;
-    }
 
-    /* Copy out original auth tag from req->src. */
-    scatterwalk_map_and_copy(origAuthTag, req->src,
-                             req->assoclen + req->cryptlen - tfm->authsize,
-                             tfm->authsize, 0);
-
-    /* Compare against generated tag. */
-    if (crypto_memneq(origAuthTag, authTag, tfm->authsize)) {
-        memzero_explicit(authTag, tfm->authsize);
-        return -EBADMSG;
+        if (err == AES_GCM_AUTH_E) {
+            return -EBADMSG;
+        }
+        else {
+            return err;
+        }
     }
 
     return err;
