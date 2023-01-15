@@ -115,17 +115,17 @@ static int updateFipsHash(void);
 
 
 #ifdef LINUXKM_REGISTER_ALG
-  #if defined(NO_AES)
+#if defined(NO_AES)
     #error LINUXKM_REGISTER_ALG requires AES.
-  #endif
+#endif
 
-  #if !defined(HAVE_AESGCM) && !defined(HAVe_AES_CBC)
-    #error LINUXKM_REGISTER_ALG requires AES-CBC or GCM.
-  #endif
+#if !defined(HAVE_AESGCM) && !defined(HAVe_AES_CBC) && !defined(WOLFSSL_AES_CFB)
+    #error LINUXKM_REGISTER_ALG requires AES-CBC, CFB, or GCM.
+#endif
 
-  #if defined(HAVE_AESGCM) && !defined(WOLFSSL_AESGCM_STREAM)
+#if defined(HAVE_AESGCM) && !defined(WOLFSSL_AESGCM_STREAM)
     #error LINUXKM_REGISTER_ALG requires AESGCM_STREAM.
-  #endif
+#endif
 
 #define WOLFKM_CBC_NAME   "cbc(aes)"
 #define WOLFKM_CFB_NAME   "cfb(aes)"
@@ -140,7 +140,7 @@ static int  linuxkm_test_alg(void);
 static int  linuxkm_test_cbc(void);
 static int  linuxkm_test_cfb(void);
 static int  linuxkm_test_gcm(void);
-#endif
+#endif /* endif LINUXKM_REGISTER_ALG */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
 static int __init wolfssl_init(void)
