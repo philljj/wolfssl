@@ -511,6 +511,21 @@ then
     AM_CFLAGS="$AM_CFLAGS -DNO_DEV_RANDOM -DNO_WRITEV -DNO_STDIO_FILESYSTEM -DWOLFSSL_NO_SOCK -DWOLFSSL_USER_IO"
 fi
 
+# Linux Kernel Module
+AC_ARG_ENABLE([linuxkm-register-alg],
+    [AS_HELP_STRING([--enable-linuxkm-register-alg],[Register wolfCrypt AES in linux kernel crypto API (default: disabled)])],
+    [ENABLED_LINUXKM_REGISTER_ALG=$enableval],
+    [ENABLED_LINUXKM_REGISTER_ALG=no]
+    )
+
+if test "$ENABLED_LINUXKM_REGISTER_ALG" = "yes"
+then
+    if test "$ENABLED_LINUXKM" != "yes"
+    then
+        AC_MSG_ERROR([linuxkm-register-alg requires linuxkm.])
+    fi
+    AM_CFLAGS="$AM_CFLAGS -DLINUXKM_REGISTER_ALG"
+fi
 
 # MATH LIBRARY SELECTION
 # Single Precision maths implementation
