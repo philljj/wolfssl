@@ -6971,6 +6971,13 @@ int wolfSSL_X509_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
     return wolfSSL_X509_print_ex(bio, x509, 0, 0);
 }
 
+int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio, WOLFSSL_X509_ACERT* x509_acert)
+{
+    (void)bio;
+    (void)x509_acert;
+    return 0;
+}
+
 #ifndef NO_FILESYSTEM
 int wolfSSL_X509_print_fp(XFILE fp, WOLFSSL_X509 *x509)
 {
@@ -11275,6 +11282,18 @@ cleanup:
         return x509;
     }
 
+
+    WOLFSSL_X509_ACERT *wolfSSL_PEM_read_bio_X509_ACERT(WOLFSSL_BIO *bp,
+                                                        WOLFSSL_X509_ACERT **x,
+                                                        wc_pem_password_cb *cb,
+                                                        void *u)
+    {
+        (void)bp;
+        (void)x;
+        (void)cb;
+        (void)u;
+        return NULL;
+    }
 
     WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509(WOLFSSL_BIO *bp, WOLFSSL_X509 **x,
                                             wc_pem_password_cb *cb, void *u)
