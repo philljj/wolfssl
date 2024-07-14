@@ -85,6 +85,7 @@ typedef WOLFSSL_X509       X509_REQ;
 typedef WOLFSSL_X509_NAME  X509_NAME;
 typedef WOLFSSL_X509_INFO  X509_INFO;
 typedef WOLFSSL_X509_CHAIN X509_CHAIN;
+typedef WOLFSSL_X509       X509_ACERT;
 
 /* STACK_OF(ASN1_OBJECT) */
 typedef WOLFSSL_STACK      EXTENDED_KEY_USAGE;
@@ -429,6 +430,7 @@ typedef STACK_OF(ACCESS_DESCRIPTION) AUTHORITY_INFO_ACCESS;
 #define d2i_X509_fp                     wolfSSL_d2i_X509_fp
 #define i2d_X509                        wolfSSL_i2d_X509
 #define d2i_X509                        wolfSSL_d2i_X509
+#define PEM_read_bio_X509_ACERT         wolfSSL_PEM_read_bio_X509_ACERT
 #define PEM_read_bio_X509               wolfSSL_PEM_read_bio_X509
 #define PEM_read_bio_X509_REQ           wolfSSL_PEM_read_bio_X509_REQ
 #define PEM_read_X509_REQ               wolfSSL_PEM_read_X509_REQ
@@ -462,6 +464,7 @@ typedef STACK_OF(ACCESS_DESCRIPTION) AUTHORITY_INFO_ACCESS;
 #define X509_new                        wolfSSL_X509_new
 #define X509_up_ref                     wolfSSL_X509_up_ref
 #define X509_free                       wolfSSL_X509_free
+#define X509_ACERT_free                 wolfSSL_X509_ACERT_free
 #define X509_load_certificate_file      wolfSSL_X509_load_certificate_file
 #define X509_digest                     wolfSSL_X509_digest
 #define X509_pubkey_digest              wolfSSL_X509_pubkey_digest
@@ -510,6 +513,7 @@ typedef STACK_OF(ACCESS_DESCRIPTION) AUTHORITY_INFO_ACCESS;
 #define X509_REQ_set_version            wolfSSL_X509_set_version
 #define X509_sign                       wolfSSL_X509_sign
 #define X509_sign_ctx                   wolfSSL_X509_sign_ctx
+#define X509_ACERT_print                wolfSSL_X509_ACERT_print
 #define X509_print                      wolfSSL_X509_print
 #define X509_REQ_print                  wolfSSL_X509_print
 #define X509_print_ex                   wolfSSL_X509_print_ex

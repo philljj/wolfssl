@@ -3283,6 +3283,15 @@ void wolfSSL_X509_free(WOLFSSL_X509* x509)
     ExternalFreeX509(x509);
 }
 
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+WOLFSSL_ABI
+void wolfSSL_X509_ACERT_free(WOLFSSL_X509* x509)
+{
+    WOLFSSL_ENTER("wolfSSL_FreeX509");
+    ExternalFreeX509(x509);
+}
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+
 
 /* copy name into in buffer, at most sz bytes, if buffer is null will
    malloc buffer, call responsible for freeing                     */
@@ -5208,6 +5217,84 @@ WOLFSSL_X509* wolfSSL_X509_load_certificate_file(const char* fname, int format)
 }
 #endif /* !NO_FILESYSTEM */
 
+static WOLFSSL_X509* loadX509AcertFromBuffer(const unsigned char * buf, int sz,
+                                             int format)
+{
+    int            ret = 0;
+    WOLFSSL_X509 * x509 = NULL;
+    DerBuffer *    der = NULL;
+
+    WOLFSSL_ENTER("loadX509AcertFromBuffer");
+
+    if (format == WOLFSSL_FILETYPE_PEM) {
+    #ifdef WOLFSSL_PEM_TO_DER
+        ret = PemToDer(buf, sz, ACERT_TYPE, &der, NULL, NULL, NULL);
+        if (ret != 0) {
+            FreeDer(&der);
+        }
+    #else
+        ret = NOT_COMPILED_IN;
+    #endif
+    }
+    else {
+        ret = AllocDer(&der, (word32)sz, ACERT_TYPE, NULL);
+        if (ret == 0) {
+            XMEMCPY(der->buffer, buf, sz);
+        }
+    }
+
+    /* At this point we want `der` to have the certificate in DER format */
+    /* ready to be decoded. */
+    if (der != NULL && der->buffer != NULL) {
+    #ifdef WOLFSSL_SMALL_STACK
+        DecodedCert* cert;
+    #else
+        DecodedCert  cert[1];
+    #endif
+
+    #ifdef WOLFSSL_SMALL_STACK
+        cert = (DecodedCert*)XMALLOC(sizeof(DecodedCert), NULL,
+                                     DYNAMIC_TYPE_DCERT);
+        if (cert == NULL) {
+            ret = MEMORY_ERROR;
+        }
+        else
+    #endif
+        {
+            InitDecodedCert(cert, der->buffer, der->length, NULL);
+            ret = ParseX509Acert(cert, VERIFY_SKIP_DATE);
+            if (ret == 0) {
+                x509 = (WOLFSSL_X509*)XMALLOC(sizeof(WOLFSSL_X509), NULL,
+                                              DYNAMIC_TYPE_X509);
+                if (x509 != NULL) {
+                    InitX509(x509, 1, NULL);
+                    ret = CopyDecodedToX509(x509, cert);
+                    if (ret != 0) {
+                        wolfSSL_X509_free(x509);
+                        x509 = NULL;
+                    }
+                }
+                else {
+                    ret = MEMORY_ERROR;
+                }
+            }
+
+            FreeDecodedCert(cert);
+        #ifdef WOLFSSL_SMALL_STACK
+            XFREE(cert, NULL, DYNAMIC_TYPE_DCERT);
+        #endif
+        }
+
+        FreeDer(&der);
+    }
+
+    if (ret != 0) {
+        WOLFSSL_ERROR(ret);
+    }
+
+    return x509;
+}
+
 static WOLFSSL_X509* loadX509orX509REQFromBuffer(
     const unsigned char* buf, int sz, int format, int type)
 {
@@ -5293,6 +5380,14 @@ WOLFSSL_X509* wolfSSL_X509_load_certificate_buffer(
     return loadX509orX509REQFromBuffer(buf, sz,
             format, CERT_TYPE);
 }
+
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+WOLFSSL_X509* wolfSSL_X509_ACERT_load_certificate_buffer(
+    const unsigned char* buf, int sz, int format)
+{
+    return loadX509AcertFromBuffer(buf, sz, format);
+}
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
 
 #ifdef WOLFSSL_CERT_REQ
 WOLFSSL_X509* wolfSSL_X509_REQ_load_certificate_buffer(
@@ -5830,6 +5925,220 @@ int wolfSSL_X509_cmp(const WOLFSSL_X509 *a, const WOLFSSL_X509 *b)
     #define MAX_WIDTH 80
 #endif
 
+#if defined(WOLFSSL_ACERT)
+#define DIR_TAGS 4
+
+/* Convenience struct and function for printing the Holder sub fields
+ * of an X509 Attribute struct.
+ *
+ * */
+struct dir_print_t {
+    const char * pfx;
+    const byte   tag[3];
+};
+
+static struct dir_print_t dir_print[DIR_TAGS] =
+{
+    {
+        "C=",
+        {0x55, 0x04, 0x06}
+    },
+
+    {
+        "O=",
+        {0x55, 0x04, 0x0a}
+    },
+
+
+    {
+        "OU=",
+        {0x55, 0x04, 0x0b}
+    },
+
+    {
+        "CN=",
+        {0x55, 0x04, 0x03}
+    },
+};
+
+/* Print an entry of ASN_DIR_TYPE into dst of max length max_len.
+ *
+ * Returns total_len of str on success.
+ * Returns < 0 on failure.
+ * */
+static int X509PrintDirType(char * dst, word32 max_len, const DNS_entry * entry)
+{
+    word32       k = 0;
+    word32       i = 0;
+    const char * src = entry->name;
+    word32       total_len = 0;
+    word32       bytes_left = max_len;
+    word32       fld_len = 0;
+    word32       match_found = 0;
+
+    const byte C_tag[]  = {0x55, 0x04, 0x06}; /* C= */
+    const byte CN_tag[] = {0x55, 0x04, 0x03}; /* CN= */
+    const byte O_tag[]  = {0x55, 0x04, 0x0a}; /* O= */
+    const byte OU_tag[] = {0x55, 0x04, 0x0b}; /* OU= */
+
+    XMEMSET(dst, 0, max_len);
+
+    /* loop over printable DIR tags. */
+    for (k = 0; k < DIR_TAGS; ++k) {
+        const char * pfx = dir_print[k].pfx;
+        const byte * tag = dir_print[k].tag;
+
+        /* walk through entry looking for matches. */
+        for (i = 0; i < max_len; ++i) {
+            if (XMEMCMP(tag, &src[i], 3) == 0) {
+                if (match_found) {
+                    /* append a {',', ' '} before doing anything else. */
+                    *dst++ = ',';
+                    *dst++ = ' ';
+                    total_len += 2;
+                    bytes_left -= 2;
+                }
+
+                fld_len = src[i + 4];
+                i += 5;
+
+                XSTRNCPY(dst, pfx, XSTRLEN(pfx));
+                dst += XSTRLEN(pfx);
+                total_len += XSTRLEN(pfx);
+                bytes_left -= XSTRLEN(pfx);
+
+                XMEMCPY(dst, &src[i], fld_len);
+                i += fld_len;
+                dst += fld_len;
+                total_len += fld_len;
+                bytes_left -= fld_len;
+
+                match_found = 1;
+            }
+        }
+    }
+
+    (void) C_tag;
+    (void) CN_tag;
+    (void) O_tag;
+    (void) OU_tag;
+
+    return 0;
+}
+
+static int X509_ACERT_print_name_entry(WOLFSSL_BIO* bio,
+                                       const DNS_entry* entry, int indent)
+{
+    int  ret = WOLFSSL_SUCCESS;
+    int  nameCount = 0;
+    char scratch[MAX_WIDTH];
+    int  len;
+
+    if (bio == NULL || entry == NULL) {
+        return WOLFSSL_FAILURE;
+    }
+
+    len = XSNPRINTF(scratch, MAX_WIDTH, "%*s", indent, "");
+    if (len >= MAX_WIDTH) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (wolfSSL_BIO_write(bio, scratch, (int)XSTRLEN(scratch)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    while (entry != NULL) {
+        ++nameCount;
+        if (nameCount > 1) {
+            if (wolfSSL_BIO_write(bio, ", ", 2) <= 0) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+
+        if (entry->type == ASN_DNS_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH, "DNS:%s", entry->name);
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+    #if defined(OPENSSL_ALL) || defined(WOLFSSL_IP_ALT_NAME)
+        else if (entry->type == ASN_IP_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH, "IP Address:%s",
+                    entry->ipString);
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+    #endif /* OPENSSL_ALL || WOLFSSL_IP_ALT_NAME */
+        else if (entry->type == ASN_RFC822_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH, "email:%s",
+                    entry->name);
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+        else if (entry->type == ASN_DIR_TYPE) {
+            len = X509PrintDirType(scratch, MAX_WIDTH, entry);
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+        else if (entry->type == ASN_URI_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH, "URI:%s",
+                entry->name);
+             if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+    #if defined(OPENSSL_ALL)
+        else if (entry->type == ASN_RID_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH, "Registered ID:%s",
+                entry->ridString);
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+    #endif
+        else if (entry->type == ASN_OTHER_TYPE) {
+            len = XSNPRINTF(scratch, MAX_WIDTH,
+                "othername <unsupported>");
+            if (len >= MAX_WIDTH) {
+                ret = WOLFSSL_FAILURE;
+                break;
+            }
+        }
+        else {
+            WOLFSSL_MSG("Bad alt name type.");
+            ret = WOLFSSL_FAILURE;
+            break;
+        }
+
+        if (wolfSSL_BIO_write(bio, scratch, (int)XSTRLEN(scratch))
+                <= 0) {
+            ret = WOLFSSL_FAILURE;
+            break;
+        }
+
+        entry = entry->next;
+    }
+
+    if (ret == WOLFSSL_SUCCESS && wolfSSL_BIO_write(bio, "\n", 1) <= 0) {
+        ret = WOLFSSL_FAILURE;
+    }
+
+    return ret;
+}
+
+
+#endif /* if WOLFSSL_ACERT*/
+
 static int X509PrintSubjAltName(WOLFSSL_BIO* bio, WOLFSSL_X509* x509,
         int indent)
 {
@@ -5892,9 +6201,7 @@ static int X509PrintSubjAltName(WOLFSSL_BIO* bio, WOLFSSL_X509* x509,
                     }
                 }
                 else if (entry->type == ASN_DIR_TYPE) {
-                    /* @TODO entry->name in ASN1 syntax */
-                    len = XSNPRINTF(scratch, MAX_WIDTH,
-                        "DirName:<print out not supported yet>");
+                    len = X509PrintDirType(scratch, MAX_WIDTH, entry);
                     if (len >= MAX_WIDTH) {
                         ret = WOLFSSL_FAILURE;
                         break;
@@ -6157,6 +6464,69 @@ static int X509PrintSerial(WOLFSSL_BIO* bio, WOLFSSL_X509* x509, int indent)
     }
     return WOLFSSL_SUCCESS;
 }
+
+#ifndef NO_ASN_TIME
+static int X509PrintValidity(WOLFSSL_BIO* bio, WOLFSSL_X509* x509, int indent)
+{
+    char tmp[80];
+    (void) indent;
+
+    if (wolfSSL_BIO_write(bio, "        Validity\n",
+                  (int)XSTRLEN("        Validity\n")) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (wolfSSL_BIO_write(bio, "            Not Before: ",
+                  (int)XSTRLEN("            Not Before: ")) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+    if (x509->notBefore.length > 0) {
+        if (GetTimeString(x509->notBefore.data, ASN_UTC_TIME,
+            tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
+            if (GetTimeString(x509->notBefore.data, ASN_GENERALIZED_TIME,
+            tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
+                WOLFSSL_MSG("Error getting not before date");
+                return WOLFSSL_FAILURE;
+            }
+        }
+    }
+    else {
+        XSTRNCPY(tmp, "Not Set", sizeof(tmp)-1);
+    }
+    tmp[sizeof(tmp) - 1] = '\0'; /* make sure null terminated */
+    if (wolfSSL_BIO_write(bio, tmp, (int)XSTRLEN(tmp)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (wolfSSL_BIO_write(bio, "\n            Not After : ",
+                  (int)XSTRLEN("\n            Not After : ")) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+    if (x509->notAfter.length > 0) {
+        if (GetTimeString(x509->notAfter.data, ASN_UTC_TIME,
+            tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
+            if (GetTimeString(x509->notAfter.data, ASN_GENERALIZED_TIME,
+                tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
+                WOLFSSL_MSG("Error getting not after date");
+                return WOLFSSL_FAILURE;
+            }
+        }
+    }
+    else {
+        XSTRNCPY(tmp, "Not Set", sizeof(tmp)-1);
+    }
+    tmp[sizeof(tmp) - 1] = '\0'; /* make sure null terminated */
+    if (wolfSSL_BIO_write(bio, tmp, (int)XSTRLEN(tmp)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (wolfSSL_BIO_write(bio, "\n\0", (int)XSTRLEN("\n\0")) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    return WOLFSSL_SUCCESS;
+}
+#endif /* ifndef NO_ASN_TIME */
 
 /* iterate through certificate extensions printing them out in human readable
  * form
@@ -6878,65 +7248,12 @@ int wolfSSL_X509_print_ex(WOLFSSL_BIO* bio, WOLFSSL_X509* x509,
         return WOLFSSL_FAILURE;
     }
 
-#ifndef NO_ASN_TIME
+    #ifndef NO_ASN_TIME
     /* print validity */
-    {
-        char tmp[80];
-
-        if (wolfSSL_BIO_write(bio, "        Validity\n",
-                      (int)XSTRLEN("        Validity\n")) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
-
-        if (wolfSSL_BIO_write(bio, "            Not Before: ",
-                      (int)XSTRLEN("            Not Before: ")) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
-        if (x509->notBefore.length > 0) {
-            if (GetTimeString(x509->notBefore.data, ASN_UTC_TIME,
-                tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
-                if (GetTimeString(x509->notBefore.data, ASN_GENERALIZED_TIME,
-                tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
-                    WOLFSSL_MSG("Error getting not before date");
-                    return WOLFSSL_FAILURE;
-                }
-            }
-        }
-        else {
-            XSTRNCPY(tmp, "Not Set", sizeof(tmp)-1);
-        }
-        tmp[sizeof(tmp) - 1] = '\0'; /* make sure null terminated */
-        if (wolfSSL_BIO_write(bio, tmp, (int)XSTRLEN(tmp)) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
-
-        if (wolfSSL_BIO_write(bio, "\n            Not After : ",
-                      (int)XSTRLEN("\n            Not After : ")) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
-        if (x509->notAfter.length > 0) {
-            if (GetTimeString(x509->notAfter.data, ASN_UTC_TIME,
-                tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
-                if (GetTimeString(x509->notAfter.data, ASN_GENERALIZED_TIME,
-                    tmp, sizeof(tmp)) != WOLFSSL_SUCCESS) {
-                    WOLFSSL_MSG("Error getting not after date");
-                    return WOLFSSL_FAILURE;
-                }
-            }
-        }
-        else {
-            XSTRNCPY(tmp, "Not Set", sizeof(tmp)-1);
-        }
-        tmp[sizeof(tmp) - 1] = '\0'; /* make sure null terminated */
-        if (wolfSSL_BIO_write(bio, tmp, (int)XSTRLEN(tmp)) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
-
-        if (wolfSSL_BIO_write(bio, "\n\0", (int)XSTRLEN("\n\0")) <= 0) {
-            return WOLFSSL_FAILURE;
-        }
+    if (X509PrintValidity(bio, x509, 8) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
     }
-    #endif
+    #endif /* NO_ASN_TIME */
 
     /* print subject */
     if (X509PrintName(bio, wolfSSL_X509_get_subject_name(x509), subjType, 8)
@@ -6970,6 +7287,131 @@ int wolfSSL_X509_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
 {
     return wolfSSL_X509_print_ex(bio, x509, 0, 0);
 }
+
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
+{
+    const char * hdr =                "Attribute Certificate:\n";
+    const char * data_hdr =           "    Data:\n";
+    const char * holder_hdr =         "        Holder:\n";
+    const char * holder_issuer_hdr =  "            Issuer:";
+    const char * holder_name_hdr =    "            Name:";
+    const char * attcert_issuer_hdr = "        Issuer:";
+
+    if (bio == NULL || x509 == NULL) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* print acert header */
+    if (wolfSSL_BIO_write(bio, hdr, (int)XSTRLEN(hdr)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* print data header */
+    if (wolfSSL_BIO_write(bio, data_hdr, (int)XSTRLEN(data_hdr)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* print version of cert */
+    if (X509PrintVersion(bio, wolfSSL_X509_version(x509), 8)
+            != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* print serial number out */
+    if (X509PrintSerial(bio, x509, 8) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* print holder field */
+    if (wolfSSL_BIO_write(bio, holder_hdr, (int)XSTRLEN(holder_hdr)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (x509->holderEntityName != NULL) {
+        /* print issuer header */
+        if (wolfSSL_BIO_write(bio, holder_name_hdr,
+            (int)XSTRLEN(holder_name_hdr)) <= 0) {
+            return WOLFSSL_FAILURE;
+        }
+
+        if (X509_ACERT_print_name_entry(bio, x509->holderEntityName, 1)
+                != WOLFSSL_SUCCESS) {
+            return WOLFSSL_FAILURE;
+        }
+    }
+
+    if (x509->holderIssuerName != NULL) {
+        /* print issuer header */
+        if (wolfSSL_BIO_write(bio, holder_issuer_hdr,
+            (int)XSTRLEN(holder_issuer_hdr)) <= 0) {
+            return WOLFSSL_FAILURE;
+        }
+
+        if (X509_ACERT_print_name_entry(bio, x509->holderIssuerName, 1)
+                != WOLFSSL_SUCCESS) {
+            return WOLFSSL_FAILURE;
+        }
+    }
+
+    if (x509->holderSerialSz > 0) {
+        X509PrintSerial_ex(bio, x509->holderSerial, x509->holderSerialSz,
+                           1, 12);
+    }
+
+    /* print issuer header */
+    if (wolfSSL_BIO_write(bio, attcert_issuer_hdr,
+        (int)XSTRLEN(attcert_issuer_hdr)) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    if (x509->AttCertIssuerName != NULL) {
+        if (X509_ACERT_print_name_entry(bio, x509->AttCertIssuerName, 1)
+                != WOLFSSL_SUCCESS) {
+            return WOLFSSL_FAILURE;
+        }
+    }
+    else {
+        const char * msg = " Issuer type not supported.\n";
+        if (wolfSSL_BIO_write(bio, msg, (int)XSTRLEN(msg)) <= 0) {
+            return WOLFSSL_FAILURE;
+        }
+    }
+
+    #ifndef NO_ASN_TIME
+    /* print validity */
+    if (X509PrintValidity(bio, x509, 8) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+    #endif /* NO_ASN_TIME */
+
+    /* print raw attributes */
+    if (x509->rawAttr && x509->rawAttrLen > 0) {
+        char attr_hdr[128]; /* buffer for XSNPRINTF */
+
+        if (XSNPRINTF(attr_hdr, 128, "%*s%s: %d bytes\n", 8, "",
+                    "Attributes", x509->rawAttrLen) >= 128) {
+            return WOLFSSL_FAILURE;
+        }
+
+        if (wolfSSL_BIO_write(bio, attr_hdr, (int)XSTRLEN(attr_hdr)) <= 0) {
+                return WOLFSSL_FAILURE;
+        }
+    }
+
+    /* print out sig algo and signature */
+    if (X509PrintSignature(bio, x509, 0, 8) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+
+    /* done with print out */
+    if (wolfSSL_BIO_write(bio, "\n\0", (int)XSTRLEN("\n\0")) <= 0) {
+        return WOLFSSL_FAILURE;
+    }
+
+    return WOLFSSL_SUCCESS;
+}
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
 
 #ifndef NO_FILESYSTEM
 int wolfSSL_X509_print_fp(XFILE fp, WOLFSSL_X509 *x509)
@@ -11196,7 +11638,8 @@ cleanup:
 
         WOLFSSL_ENTER("loadX509orX509REQFromPemBio");
 
-        if (bp == NULL || (type != CERT_TYPE && type != CERTREQ_TYPE)) {
+        if (bp == NULL || (type != CERT_TYPE && type != CERTREQ_TYPE &&
+            type != ACERT_TYPE)) {
             WOLFSSL_LEAVE("wolfSSL_PEM_read_bio_X509", BAD_FUNC_ARG);
             return NULL;
         }
@@ -11256,6 +11699,12 @@ cleanup:
                                                           WOLFSSL_FILETYPE_PEM);
             else
         #endif
+        #if defined(WOLFSSL_ACERT)
+            if (type == ACERT_TYPE)
+                x509 = wolfSSL_X509_ACERT_load_certificate_buffer(pem, pemSz,
+                                                          WOLFSSL_FILETYPE_PEM);
+            else
+        #endif
                 x509 = wolfSSL_X509_load_certificate_buffer(pem, pemSz,
                                                           WOLFSSL_FILETYPE_PEM);
         }
@@ -11275,6 +11724,16 @@ cleanup:
         return x509;
     }
 
+
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509_ACERT(WOLFSSL_BIO *bp,
+                                                  WOLFSSL_X509 **x,
+                                                  wc_pem_password_cb *cb,
+                                                  void *u)
+    {
+        return loadX509orX509REQFromPemBio(bp, x, cb, u, ACERT_TYPE);
+    }
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
 
     WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509(WOLFSSL_BIO *bp, WOLFSSL_X509 **x,
                                             wc_pem_password_cb *cb, void *u)

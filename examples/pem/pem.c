@@ -173,6 +173,9 @@ static const String2Val type_map[] = {
 #ifdef WOLFSSL_CERT_REQ
     { "CERTIFICATE REQUEST"  , CERTREQ_TYPE              },
 #endif
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    { "ATTRIBUTE CERTIFICATE", ACERT_TYPE                 },
+#endif
 #ifndef NO_DH
     { "DH PARAMETERS"        , DH_PARAM_TYPE             },
     { "X9.42 DH PARAMETERS"  , X942_PARAM_TYPE           },

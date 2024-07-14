@@ -4649,6 +4649,24 @@ void FreeX509(WOLFSSL_X509* x509)
     XFREE(x509->altSigValDer, x509->heap, DYNAMIC_TYPE_X509_EXT);
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
 
+    #if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    if (x509->holderIssuerName) {
+        FreeAltNames(x509->holderIssuerName, x509->heap);
+        x509->holderIssuerName = NULL;
+    }
+
+    if (x509->AttCertIssuerName) {
+        FreeAltNames(x509->AttCertIssuerName, x509->heap);
+        x509->AttCertIssuerName = NULL;
+    }
+
+    if (x509->rawAttr != NULL) {
+        XFREE(x509->rawAttr, x509->heap, DYNAMIC_TYPE_X509_EXT);
+        x509->rawAttr = NULL;
+        x509->rawAttrLen = 0;
+    }
+    #endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+
     #if defined(OPENSSL_EXTRA) || defined(OPENSSL_ALL)
         wolfSSL_RefFree(&x509->ref);
     #endif
@@ -13195,6 +13213,43 @@ int CopyDecodedToX509(WOLFSSL_X509* x509, DecodedCert* dCert)
         }
     }
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
+
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    if (dCert->holderSerialSz > 0) {
+        /* This ACERT Holder field had a serial number. Copy it. */
+        XMEMCPY(x509->holderSerial, dCert->holderSerial,
+                dCert->holderSerialSz);
+        x509->holderSerialSz = dCert->holderSerialSz;
+    }
+
+    if (CopyAltNames(&x509->holderIssuerName, dCert->holderIssuerName,
+                ASN_DIR_TYPE, x509->heap) != 0) {
+        return MEMORY_E;
+    }
+
+    if (CopyAltNames(&x509->holderEntityName, dCert->holderEntityName,
+                ASN_DIR_TYPE, x509->heap) != 0) {
+        return MEMORY_E;
+    }
+
+    if (CopyAltNames(&x509->AttCertIssuerName, dCert->AttCertIssuerName,
+                ASN_DIR_TYPE, x509->heap) != 0) {
+        return MEMORY_E;
+    }
+
+    if (dCert->rawAttr && dCert->rawAttrLen > 0) {
+        /* Allocate space for the raw Attributes field, then copy it in. */
+        x509->rawAttr = (byte*)XMALLOC(dCert->rawAttrLen, x509->heap,
+                                       DYNAMIC_TYPE_X509_EXT);
+        if (x509->rawAttr != NULL) {
+            XMEMCPY(x509->rawAttr, dCert->rawAttr, dCert->rawAttrLen);
+            x509->rawAttrLen = dCert->rawAttrLen;
+        }
+        else {
+            ret = MEMORY_E;
+        }
+    }
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
 
     return ret;
 }

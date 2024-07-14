@@ -1992,6 +1992,15 @@ struct DecodedCert {
     byte *altSigValDer;
     int altSigValLen;
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
+#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    byte         holderSerial[EXTERNAL_SERIAL_SIZE];
+    int          holderSerialSz;
+    DNS_entry *  holderEntityName;  /* Holder entityName from ACERT */
+    DNS_entry *  holderIssuerName;  /* Holder issuerName from ACERT */
+    DNS_entry *  AttCertIssuerName; /* AttCertIssuer name from ACERT */
+    const byte * rawAttr; /* not owned, points into raw cert */
+    word32       rawAttrLen;
+#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
 };
 
 #if defined(WOLFSSL_SM2) && defined(WOLFSSL_SM3)
@@ -2186,10 +2195,12 @@ WOLFSSL_LOCAL int CheckCSRSignaturePubKey(const byte* cert, word32 certSz,
 #endif /* WOLFSSL_CERT_REQ */
 WOLFSSL_ASN_API int AddSignature(byte* buf, int bodySz, const byte* sig, int sigSz,
                         int sigAlgoType);
+WOLFSSL_LOCAL int ParseX509Acert(DecodedCert* cert, int verify);
 WOLFSSL_LOCAL int ParseCertRelative(DecodedCert* cert, int type, int verify,
                                     void* cm, Signer *extraCa);
 WOLFSSL_LOCAL int DecodeToKey(DecodedCert* cert, int verify);
 #ifdef WOLFSSL_ASN_TEMPLATE
+WOLFSSL_LOCAL int DecodeAcert(DecodedCert* cert, int verify);
 WOLFSSL_LOCAL int DecodeCert(DecodedCert* cert, int verify, int* criticalExt);
 #endif
 WOLFSSL_LOCAL int TryDecodeRPKToKey(DecodedCert* cert);
