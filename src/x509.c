@@ -3283,14 +3283,14 @@ void wolfSSL_X509_free(WOLFSSL_X509* x509)
     ExternalFreeX509(x509);
 }
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_ABI
 void wolfSSL_X509_ACERT_free(WOLFSSL_X509* x509)
 {
     WOLFSSL_ENTER("wolfSSL_FreeX509");
     ExternalFreeX509(x509);
 }
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
 
 /* copy name into in buffer, at most sz bytes, if buffer is null will
@@ -5381,13 +5381,13 @@ WOLFSSL_X509* wolfSSL_X509_load_certificate_buffer(
             format, CERT_TYPE);
 }
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_X509* wolfSSL_X509_ACERT_load_certificate_buffer(
     const unsigned char* buf, int sz, int format)
 {
     return loadX509AcertFromBuffer(buf, sz, format);
 }
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
 #ifdef WOLFSSL_CERT_REQ
 WOLFSSL_X509* wolfSSL_X509_REQ_load_certificate_buffer(
@@ -7288,7 +7288,7 @@ int wolfSSL_X509_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
     return wolfSSL_X509_print_ex(bio, x509, 0, 0);
 }
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
 {
     const char * hdr =                "Attribute Certificate:\n";
@@ -7411,7 +7411,7 @@ int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509)
 
     return WOLFSSL_SUCCESS;
 }
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
 #ifndef NO_FILESYSTEM
 int wolfSSL_X509_print_fp(XFILE fp, WOLFSSL_X509 *x509)
@@ -11725,7 +11725,7 @@ cleanup:
     }
 
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509_ACERT(WOLFSSL_BIO *bp,
                                                   WOLFSSL_X509 **x,
                                                   wc_pem_password_cb *cb,
@@ -11733,7 +11733,7 @@ cleanup:
     {
         return loadX509orX509REQFromPemBio(bp, x, cb, u, ACERT_TYPE);
     }
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
     WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509(WOLFSSL_BIO *bp, WOLFSSL_X509 **x,
                                             wc_pem_password_cb *cb, void *u)

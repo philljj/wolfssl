@@ -1992,7 +1992,7 @@ struct DecodedCert {
     byte *altSigValDer;
     int altSigValLen;
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     byte         holderSerial[EXTERNAL_SERIAL_SIZE];
     int          holderSerialSz;
     DNS_entry *  holderEntityName;  /* Holder entityName from ACERT */
@@ -2000,7 +2000,7 @@ struct DecodedCert {
     DNS_entry *  AttCertIssuerName; /* AttCertIssuer name from ACERT */
     const byte * rawAttr; /* not owned, points into raw cert */
     word32       rawAttrLen;
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 };
 
 #if defined(WOLFSSL_SM2) && defined(WOLFSSL_SM3)

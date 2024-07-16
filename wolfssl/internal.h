@@ -5239,7 +5239,7 @@ struct WOLFSSL_X509 {
     byte *altSigValDer;
     int altSigValLen;
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     /* copy of raw Attributes field from */
     byte         holderSerial[EXTERNAL_SERIAL_SIZE];
     int          holderSerialSz;
@@ -5248,7 +5248,7 @@ struct WOLFSSL_X509 {
     DNS_entry *  AttCertIssuerName; /* AttCertIssuer name from ACERT */
     byte *       rawAttr;
     word32       rawAttrLen;
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 };
 
 

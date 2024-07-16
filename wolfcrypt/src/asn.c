@@ -11504,14 +11504,14 @@ void FreeDecodedCert(DecodedCert* cert)
     if (cert->sce_tsip_encRsaKeyIdx != NULL)
         XFREE(cert->sce_tsip_encRsaKeyIdx, cert->heap, DYNAMIC_TYPE_RSA);
 #endif
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     if (cert->holderIssuerName)
         FreeAltNames(cert->holderIssuerName, cert->heap);
     if (cert->holderEntityName)
         FreeAltNames(cert->holderEntityName, cert->heap);
     if (cert->AttCertIssuerName)
         FreeAltNames(cert->AttCertIssuerName, cert->heap);
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
     FreeSignatureCtx(&cert->sigCtx);
 }
 
@@ -24494,10 +24494,10 @@ wcchar END_CERT             = "-----END CERTIFICATE-----";
     wcchar BEGIN_CERT_REQ   = "-----BEGIN CERTIFICATE REQUEST-----";
     wcchar END_CERT_REQ     = "-----END CERTIFICATE REQUEST-----";
 #endif
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     wcchar BEGIN_ACERT      = "-----BEGIN ATTRIBUTE CERTIFICATE-----";
     wcchar END_ACERT        = "-----END ATTRIBUTE CERTIFICATE-----";
-#endif
+#endif /* WOLFSSL_ACERT */
 #ifndef NO_DH
     wcchar BEGIN_DH_PARAM   = "-----BEGIN DH PARAMETERS-----";
     wcchar END_DH_PARAM     = "-----END DH PARAMETERS-----";
@@ -24633,13 +24633,13 @@ int wc_PemGetHeaderFooter(int type, const char** header, const char** footer)
             ret = 0;
             break;
     #endif
-    #if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    #if defined(WOLFSSL_ACERT)
         case ACERT_TYPE:
             if (header) *header = BEGIN_ACERT;
             if (footer) *footer = END_ACERT;
             ret = 0;
             break;
-    #endif
+    #endif /* WOLFSSL_ACERT */
     #ifndef NO_DSA
         case DSA_TYPE:
         case DSA_PRIVATEKEY_TYPE:
@@ -40049,8 +40049,7 @@ int wc_RsaPublicKeyDecodeRaw(const byte* n, word32 nSz, const byte* e,
 }
 #endif /* !NO_RSA && (!NO_BIG_INT || WOLFSSL_SP_MATH) */
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT) && \
-    defined(WOLFSSL_ASN_TEMPLATE)
+#if defined(WOLFSSL_ACERT) && defined(WOLFSSL_ASN_TEMPLATE)
 
 /* Decode an Attribute Cert GeneralName field.
  *
@@ -40752,7 +40751,7 @@ int ParseX509Acert(DecodedCert* cert, int verify)
     FREE_ASNGETDATA(dataASN, cert->heap);
     return ret;
 }
-#endif /* if OPENSSL_EXTRA && WOLFSSL_ACERT && WOLFSSL_ASN_TEMPLATE */
+#endif /* WOLFSSL_ACERT && WOLFSSL_ASN_TEMPLATE */
 
 #ifdef WOLFSSL_SEP
 

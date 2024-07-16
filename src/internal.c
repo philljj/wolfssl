@@ -4649,7 +4649,7 @@ void FreeX509(WOLFSSL_X509* x509)
     XFREE(x509->altSigValDer, x509->heap, DYNAMIC_TYPE_X509_EXT);
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
 
-    #if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+    #if defined(WOLFSSL_ACERT)
     if (x509->holderIssuerName) {
         FreeAltNames(x509->holderIssuerName, x509->heap);
         x509->holderIssuerName = NULL;
@@ -4665,7 +4665,7 @@ void FreeX509(WOLFSSL_X509* x509)
         x509->rawAttr = NULL;
         x509->rawAttrLen = 0;
     }
-    #endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+    #endif /* WOLFSSL_ACERT */
 
     #if defined(OPENSSL_EXTRA) || defined(OPENSSL_ALL)
         wolfSSL_RefFree(&x509->ref);
@@ -13214,7 +13214,7 @@ int CopyDecodedToX509(WOLFSSL_X509* x509, DecodedCert* dCert)
     }
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
     if (dCert->holderSerialSz > 0) {
         /* This ACERT Holder field had a serial number. Copy it. */
         XMEMCPY(x509->holderSerial, dCert->holderSerial,
@@ -13249,7 +13249,7 @@ int CopyDecodedToX509(WOLFSSL_X509* x509, DecodedCert* dCert)
             ret = MEMORY_E;
         }
     }
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
     return ret;
 }

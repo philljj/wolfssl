@@ -1923,8 +1923,10 @@ WOLFSSL_API int wolfSSL_X509_signature_print(WOLFSSL_BIO *bp,
         const WOLFSSL_X509_ALGOR *sigalg, const WOLFSSL_ASN1_STRING *sig);
 WOLFSSL_API void wolfSSL_X509_get0_signature(const WOLFSSL_ASN1_BIT_STRING **psig,
         const WOLFSSL_X509_ALGOR **palg, const WOLFSSL_X509 *x509);
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_API int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio,
                                          WOLFSSL_X509* x509_acert);
+#endif /* WOLFSSL_ACERT */
 WOLFSSL_API int wolfSSL_X509_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509);
 WOLFSSL_API int wolfSSL_X509_REQ_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509);
 WOLFSSL_ABI WOLFSSL_API char* wolfSSL_X509_NAME_oneline(WOLFSSL_X509_NAME* name,
@@ -2917,9 +2919,9 @@ WOLFSSL_API WOLFSSL_X509* wolfSSL_get_chain_X509(WOLFSSL_X509_CHAIN* chain, int 
 #define wolfSSL_FreeX509(x509) wolfSSL_X509_free((x509))
 WOLFSSL_ABI WOLFSSL_API void wolfSSL_X509_free(WOLFSSL_X509* x509);
 
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_ABI WOLFSSL_API void wolfSSL_X509_ACERT_free(WOLFSSL_X509* x509);
-#endif /* OPENSSL_EXTRA && WOLFSSL_ACERT */
+#endif /* WOLFSSL_ACERT */
 
 /* get index cert in PEM */
 WOLFSSL_API int  wolfSSL_get_chain_cert_pem(WOLFSSL_X509_CHAIN* chain, int idx,
@@ -2995,10 +2997,10 @@ WOLFSSL_ABI WOLFSSL_API WOLFSSL_X509*
 #endif
 WOLFSSL_API WOLFSSL_X509* wolfSSL_X509_load_certificate_buffer(
     const unsigned char* buf, int sz, int format);
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_API WOLFSSL_X509* wolfSSL_X509_ACERT_load_certificate_buffer(
     const unsigned char* buf, int sz, int format);
-#endif
+#endif /* WOLFSSL_ACERT */
 #ifdef WOLFSSL_CERT_REQ
 WOLFSSL_API WOLFSSL_X509* wolfSSL_X509_REQ_load_certificate_buffer(
     const unsigned char* buf, int sz, int format);
@@ -4540,10 +4542,10 @@ WOLFSSL_API int wolfSSL_CTX_get_max_proto_version(WOLFSSL_CTX* ctx);
 
 WOLFSSL_API int wolfSSL_CTX_use_PrivateKey(WOLFSSL_CTX *ctx,
     WOLFSSL_EVP_PKEY *pkey);
-#if defined(OPENSSL_EXTRA) && defined(WOLFSSL_ACERT)
+#if defined(WOLFSSL_ACERT)
 WOLFSSL_API WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509_ACERT(WOLFSSL_BIO *bp,
     WOLFSSL_X509 **x, wc_pem_password_cb *cb, void *u);
-#endif
+#endif /* WOLFSSL_ACERT */
 WOLFSSL_API WOLFSSL_X509 *wolfSSL_PEM_read_bio_X509(WOLFSSL_BIO *bp,
     WOLFSSL_X509 **x, wc_pem_password_cb *cb, void *u);
 #ifdef WOLFSSL_CERT_REQ
