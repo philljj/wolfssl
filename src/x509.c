@@ -6002,7 +6002,7 @@ static int X509PrintDirType(char * dst, word32 max_len, const DNS_entry * entry)
                 fld_len = src[i + 4];
                 i += 5;
 
-                XSTRNCPY(dst, pfx, XSTRLEN(pfx));
+                XSTRNCPY(dst, pfx, bytes_left);
                 dst += XSTRLEN(pfx);
                 total_len += XSTRLEN(pfx);
                 bytes_left -= XSTRLEN(pfx);
