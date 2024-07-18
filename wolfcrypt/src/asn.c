@@ -40378,7 +40378,9 @@ static int DecodeHolder(const byte* input, word32 len, DecodedCert* cert)
             gn_len = len;
         }
 
-        printf("info: i: %d\n", i);
+        #ifdef WOLFSSL_DEBUG_ASN_TEMPLATE
+        printf("info: holder tag index: %d\n", i);
+        #endif
 
         ret = DecodeAcertGeneralNames(gn_input, gn_len, cert,
                                       &cert->holderIssuerName);
