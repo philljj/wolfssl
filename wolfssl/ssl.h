@@ -1926,6 +1926,9 @@ WOLFSSL_API void wolfSSL_X509_get0_signature(const WOLFSSL_ASN1_BIT_STRING **psi
 #if defined(WOLFSSL_ACERT)
 WOLFSSL_API int wolfSSL_X509_ACERT_print(WOLFSSL_BIO* bio,
                                          WOLFSSL_X509* x509_acert);
+WOLFSSL_API int wolfSSL_X509_ACERT_get_attr_buf(const WOLFSSL_X509* x509,
+                                                const byte ** rawAttr,
+                                                word32 * rawAttrLen);
 #endif /* WOLFSSL_ACERT */
 WOLFSSL_API int wolfSSL_X509_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509);
 WOLFSSL_API int wolfSSL_X509_REQ_print(WOLFSSL_BIO* bio, WOLFSSL_X509* x509);

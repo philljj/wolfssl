@@ -6136,6 +6136,27 @@ static int X509_ACERT_print_name_entry(WOLFSSL_BIO* bio,
     return ret;
 }
 
+/* Sets buf pointer and len to raw Attribute buffer and buffer len
+ * in X509 struct.
+ *
+ * Returns WOLFSSL_SUCCESS on success.
+ * Returns BAD_FUNC_ARG if input pointers are null.
+ * */
+WOLFSSL_API
+int wolfSSL_X509_ACERT_get_attr_buf(const WOLFSSL_X509* x509,
+                                    const byte ** rawAttr,
+                                    word32 * rawAttrLen)
+{
+    if (x509 == NULL || rawAttr == NULL || rawAttrLen == NULL) {
+        return BAD_FUNC_ARG;
+    }
+
+    *rawAttr = x509->rawAttr;
+    *rawAttrLen = x509->rawAttrLen;
+
+    return 0;
+}
+
 
 #endif /* if WOLFSSL_ACERT*/
 

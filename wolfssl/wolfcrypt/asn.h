@@ -2271,12 +2271,12 @@ WOLFSSL_LOCAL int SetShortInt(byte* input, word32* inOutIdx, word32 number,
                               word32 maxIdx);
 
 WOLFSSL_LOCAL const char* GetSigName(int oid);
-WOLFSSL_LOCAL int GetLength(const byte* input, word32* inOutIdx, int* len,
-                           word32 maxIdx);
+WOLFSSL_ASN_API int GetLength(const byte* input, word32* inOutIdx, int* len,
+                              word32 maxIdx);
 WOLFSSL_LOCAL int GetLength_ex(const byte* input, word32* inOutIdx, int* len,
                            word32 maxIdx, int check);
-WOLFSSL_LOCAL int GetSequence(const byte* input, word32* inOutIdx, int* len,
-                             word32 maxIdx);
+WOLFSSL_ASN_API int GetSequence(const byte* input, word32* inOutIdx, int* len,
+                                word32 maxIdx);
 WOLFSSL_LOCAL int GetSequence_ex(const byte* input, word32* inOutIdx, int* len,
                            word32 maxIdx, int check);
 WOLFSSL_LOCAL int GetOctetString(const byte* input, word32* inOutIdx, int* len,
@@ -2305,15 +2305,15 @@ WOLFSSL_ASN_API int GetASNInt(const byte* input, word32* inOutIdx, int* len,
     WOLFSSL_LOCAL int DecodeObjectId(const byte* in, word32 inSz,
         word16* out, word32* outSz);
 #endif
-WOLFSSL_LOCAL int GetASNObjectId(const byte* input, word32* inOutIdx, int* len,
-                                 word32 maxIdx);
+WOLFSSL_ASN_API int GetASNObjectId(const byte* input, word32* inOutIdx, int* len,
+                                   word32 maxIdx);
 WOLFSSL_LOCAL int SetObjectId(int len, byte* output);
 WOLFSSL_LOCAL int GetObjectId(const byte* input, word32* inOutIdx, word32* oid,
                               word32 oidType, word32 maxIdx);
 WOLFSSL_LOCAL int GetAlgoId(const byte* input, word32* inOutIdx, word32* oid,
                            word32 oidType, word32 maxIdx);
-WOLFSSL_LOCAL int GetASNTag(const byte* input, word32* idx, byte* tag,
-                            word32 inputSz);
+WOLFSSL_ASN_API int GetASNTag(const byte* input, word32* idx, byte* tag,
+                              word32 inputSz);
 
 WOLFSSL_LOCAL word32 SetASNLength(word32 length, byte* output);
 WOLFSSL_LOCAL word32 SetASNSequence(word32 len, byte* output);
