@@ -18848,12 +18848,13 @@ void* wolfSSL_GetHKDFExtractCtx(WOLFSSL* ssl)
 
     WOLFSSL_ASN1_OBJECT* wolfSSL_OBJ_nid2obj(int id)
     {
-        return wolfSSL_OBJ_nid2obj_ex(id, NULL);
+        return wolfSSL_OBJ_nid2obj_ex(id, NULL, NULL);
     }
 
 
     WOLFSSL_LOCAL WOLFSSL_ASN1_OBJECT* wolfSSL_OBJ_nid2obj_ex(int id,
-                                                WOLFSSL_ASN1_OBJECT* arg_obj)
+                                                WOLFSSL_ASN1_OBJECT* arg_obj,
+                                                void * heap)
     {
         word32 oidSz = 0;
         int nid = 0;
@@ -18905,7 +18906,7 @@ void* wolfSSL_GetHKDFExtractCtx(WOLFSSL* ssl)
 
         /* set object ID to buffer */
         if (obj == NULL){
-            obj = wolfSSL_ASN1_OBJECT_new();
+            obj = wolfSSL_ASN1_OBJECT_new_ex(heap);
             if (obj == NULL) {
                 WOLFSSL_MSG("Issue creating WOLFSSL_ASN1_OBJECT struct");
                 return NULL;

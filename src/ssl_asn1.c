@@ -1930,17 +1930,12 @@ int wolfSSL_ASN1_INTEGER_set(WOLFSSL_ASN1_INTEGER *a, long v)
 
 #if !defined(NO_ASN)
 #if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
-/* Create a new ASN.1 OBJECT_ID object.
- *
- * @return  ASN.1 OBJECT_ID object on success.
- * @return  NULL when dynamic memory allocation fails.
- */
-WOLFSSL_ASN1_OBJECT* wolfSSL_ASN1_OBJECT_new(void)
+WOLFSSL_ASN1_OBJECT* wolfSSL_ASN1_OBJECT_new_ex(void * heap)
 {
     WOLFSSL_ASN1_OBJECT* obj;
 
     /* Allocate memory for new ASN.1 OBJECT. */
-    obj = (WOLFSSL_ASN1_OBJECT*)XMALLOC(sizeof(WOLFSSL_ASN1_OBJECT), NULL,
+    obj = (WOLFSSL_ASN1_OBJECT*)XMALLOC(sizeof(WOLFSSL_ASN1_OBJECT), heap,
         DYNAMIC_TYPE_ASN1);
     if (obj != NULL) {
         XMEMSET(obj, 0, sizeof(WOLFSSL_ASN1_OBJECT));
@@ -1951,9 +1946,22 @@ WOLFSSL_ASN1_OBJECT* wolfSSL_ASN1_OBJECT_new(void)
     #endif
         /* Object was allocated. */
         obj->dynamic |= WOLFSSL_ASN1_DYNAMIC;
+        obj->heap = heap;
     }
 
     return obj;
+}
+
+
+
+/* Create a new ASN.1 OBJECT_ID object.
+ *
+ * @return  ASN.1 OBJECT_ID object on success.
+ * @return  NULL when dynamic memory allocation fails.
+ */
+WOLFSSL_ASN1_OBJECT* wolfSSL_ASN1_OBJECT_new(void)
+{
+    return wolfSSL_ASN1_OBJECT_new_ex(NULL);
 }
 
 /* Dispose of any ASN.1 OBJECT_ID dynamically allocated data.
@@ -1985,7 +1993,7 @@ void wolfSSL_ASN1_OBJECT_free(WOLFSSL_ASN1_OBJECT* obj)
     #ifdef WOLFSSL_DEBUG_OPENSSL
             WOLFSSL_MSG("Freeing ASN1 OBJECT");
     #endif
-            XFREE(obj, NULL, DYNAMIC_TYPE_ASN1);
+            XFREE(obj, obj->heap, DYNAMIC_TYPE_ASN1);
         }
     }
 }
@@ -2446,12 +2454,7 @@ WOLFSSL_ASN1_OBJECT* wolfSSL_sk_ASN1_OBJECT_pop(
 
 #if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
 
-/* Create a new ASN.1 STRING object.
- *
- * @return  New ASN.1 STRING object on success.
- * @return  NULL when dynamic memory allocation fails.
- */
-WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new(void)
+WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new_ex(void * heap)
 {
     WOLFSSL_ASN1_STRING* asn1;
 
@@ -2459,10 +2462,39 @@ WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new(void)
     WOLFSSL_ENTER("wolfSSL_ASN1_STRING_new");
 #endif
 
-    asn1 = (WOLFSSL_ASN1_STRING*)XMALLOC(sizeof(WOLFSSL_ASN1_STRING), NULL,
-        DYNAMIC_TYPE_OPENSSL);
+    asn1 = (WOLFSSL_ASN1_STRING*)XMALLOC(sizeof(WOLFSSL_ASN1_STRING), heap,
+                                         DYNAMIC_TYPE_OPENSSL);
     if (asn1 != NULL) {
         XMEMSET(asn1, 0, sizeof(WOLFSSL_ASN1_STRING));
+    }
+
+    asn1->heap = heap;
+
+    return asn1;
+}
+
+/* Create a new ASN.1 STRING object.
+ *
+ * @return  New ASN.1 STRING object on success.
+ * @return  NULL when dynamic memory allocation fails.
+ */
+WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new(void)
+{
+    return wolfSSL_ASN1_STRING_new_ex(NULL);
+}
+
+WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_type_new_ex(int type, void * heap)
+{
+    WOLFSSL_ASN1_STRING* asn1;
+
+#ifdef WOLFSSL_DEBUG_OPENSSL
+    WOLFSSL_ENTER("wolfSSL_ASN1_STRING_type_new");
+#endif
+
+    asn1 = wolfSSL_ASN1_STRING_new_ex(heap);
+
+    if (asn1 != NULL) {
+        asn1->type = type;
     }
 
     return asn1;
@@ -2476,18 +2508,7 @@ WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new(void)
  */
 WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_type_new(int type)
 {
-    WOLFSSL_ASN1_STRING* asn1;
-
-#ifdef WOLFSSL_DEBUG_OPENSSL
-    WOLFSSL_ENTER("wolfSSL_ASN1_STRING_type_new");
-#endif
-
-    asn1 = wolfSSL_ASN1_STRING_new();
-    if (asn1 != NULL) {
-        asn1->type = type;
-    }
-
-    return asn1;
+    return wolfSSL_ASN1_STRING_type_new_ex(type, NULL);
 }
 
 /* Dispose of ASN.1 STRING object.
@@ -2508,7 +2529,7 @@ void wolfSSL_ASN1_STRING_free(WOLFSSL_ASN1_STRING* asn1)
         }
     }
     /* Dispose of ASN.1 STRING object. */
-    XFREE(asn1, NULL, DYNAMIC_TYPE_OPENSSL);
+    XFREE(asn1, asn1->heap, DYNAMIC_TYPE_OPENSSL);
 }
 
 /* Copy an ASN.1 STRING object from src into dest.
@@ -3091,14 +3112,14 @@ int wolfSSL_ASN1_STRING_set(WOLFSSL_ASN1_STRING* asn1, const void* data, int sz)
     if (ret == 1) {
         /* Dispose of any existing dynamic data. */
         if (asn1->isDynamic) {
-            XFREE(asn1->data, NULL, DYNAMIC_TYPE_OPENSSL);
+            XFREE(asn1->data, asn1->heap, DYNAMIC_TYPE_OPENSSL);
             asn1->data = NULL;
         }
 
         /* Check string will fit - including NUL. */
         if (sz + 1 > CTC_NAME_SIZE) {
             /* Allocate new buffer. */
-            asn1->data = (char*)XMALLOC((size_t)(sz + 1), NULL,
+            asn1->data = (char*)XMALLOC((size_t)(sz + 1), asn1->heap,
                 DYNAMIC_TYPE_OPENSSL);
             if (asn1->data == NULL) {
                 ret = 0;

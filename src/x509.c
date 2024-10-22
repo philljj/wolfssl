@@ -12520,22 +12520,28 @@ err:
             if (ne->value != NULL) {
                 wolfSSL_ASN1_STRING_free(ne->value);
             }
-            XFREE(ne, NULL, DYNAMIC_TYPE_NAME_ENTRY);
+            XFREE(ne, ne->heap, DYNAMIC_TYPE_NAME_ENTRY);
         }
     }
 
 
-    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_new(void)
+    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_new_ex(void * heap)
     {
         WOLFSSL_X509_NAME_ENTRY* ne;
 
         ne = (WOLFSSL_X509_NAME_ENTRY*)XMALLOC(sizeof(WOLFSSL_X509_NAME_ENTRY),
-                NULL, DYNAMIC_TYPE_NAME_ENTRY);
+                                               heap, DYNAMIC_TYPE_NAME_ENTRY);
         if (ne != NULL) {
             XMEMSET(ne, 0, sizeof(WOLFSSL_X509_NAME_ENTRY));
+            ne->heap = heap;
         }
 
         return ne;
+    }
+
+    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_new(void)
+    {
+        return wolfSSL_X509_NAME_ENTRY_new_ex(NULL);
     }
 
     static void wolfssl_x509_name_entry_set(WOLFSSL_X509_NAME_ENTRY* ne,
@@ -12545,12 +12551,12 @@ err:
 
         ne->nid = nid;
         /* Reuse the object if already available. */
-        object = wolfSSL_OBJ_nid2obj_ex(nid, ne->object);
+        object = wolfSSL_OBJ_nid2obj_ex(nid, ne->object, ne->heap);
         if (object != NULL) {
             /* Set the object when no error. */
             ne->object = object;
         }
-        ne->value = wolfSSL_ASN1_STRING_type_new(type);
+        ne->value = wolfSSL_ASN1_STRING_type_new_ex(type, ne->heap);
         if (ne->value != NULL) {
             if (wolfSSL_ASN1_STRING_set(ne->value, (const void*)data,
                                             dataSz) == WOLFSSL_SUCCESS) {
@@ -12603,15 +12609,9 @@ err:
     }
 
 
-    /* Creates a new entry given the NID, type, and data
-     * "dataSz" is number of bytes in data, if set to -1 then XSTRLEN is used
-     * "out" can be used to store the new entry data in an existing structure
-     *       if NULL then a new WOLFSSL_X509_NAME_ENTRY structure is created
-     * returns a pointer to WOLFSSL_X509_NAME_ENTRY on success and NULL on fail
-     */
-    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_create_by_NID(
+    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_create_by_NID_ex(
             WOLFSSL_X509_NAME_ENTRY** out, int nid, int type,
-            const unsigned char* data, int dataSz)
+            const unsigned char* data, int dataSz, void * heap)
     {
         WOLFSSL_X509_NAME_ENTRY* ne;
 
@@ -12625,7 +12625,7 @@ err:
         }
 
         if (out == NULL || *out == NULL) {
-            ne = wolfSSL_X509_NAME_ENTRY_new();
+            ne = wolfSSL_X509_NAME_ENTRY_new_ex(heap);
             if (ne == NULL) {
                 return NULL;
             }
@@ -12640,6 +12640,21 @@ err:
         wolfssl_x509_name_entry_set(ne, nid, type, data, dataSz);
 
         return ne;
+    }
+
+
+    /* Creates a new entry given the NID, type, and data
+     * "dataSz" is number of bytes in data, if set to -1 then XSTRLEN is used
+     * "out" can be used to store the new entry data in an existing structure
+     *       if NULL then a new WOLFSSL_X509_NAME_ENTRY structure is created
+     * returns a pointer to WOLFSSL_X509_NAME_ENTRY on success and NULL on fail
+     */
+    WOLFSSL_X509_NAME_ENTRY* wolfSSL_X509_NAME_ENTRY_create_by_NID(
+            WOLFSSL_X509_NAME_ENTRY** out, int nid, int type,
+            const unsigned char* data, int dataSz)
+    {
+        return wolfSSL_X509_NAME_ENTRY_create_by_NID_ex(out, nid, type, data,
+                                                        dataSz, NULL);
     }
 #endif /* OPENSSL_EXTRA || OPENSSL_EXTRA_X509_SMALL */
 
@@ -12658,7 +12673,7 @@ WOLFSSL_ASN1_OBJECT* wolfSSL_X509_NAME_ENTRY_get_object(
 
     if (ne != NULL) {
         /* Create object from nid - reuse existing object if possible. */
-        object = wolfSSL_OBJ_nid2obj_ex(ne->nid, ne->object);
+        object = wolfSSL_OBJ_nid2obj_ex(ne->nid, ne->object, ne->heap);
         if (object != NULL) {
             /* Set the object when no error. */
             ne->object = object;
@@ -12812,11 +12827,12 @@ WOLFSSL_ASN1_OBJECT* wolfSSL_X509_NAME_ENTRY_get_object(
         if (current->set == 0)
             name->entrySz++;
 
-        if (wolfSSL_X509_NAME_ENTRY_create_by_NID(&current,
+        if (wolfSSL_X509_NAME_ENTRY_create_by_NID_ex(&current,
                             entry->nid,
                             wolfSSL_ASN1_STRING_type(entry->value),
                             wolfSSL_ASN1_STRING_data(entry->value),
-                            wolfSSL_ASN1_STRING_length(entry->value)) != NULL)
+                            wolfSSL_ASN1_STRING_length(entry->value), 
+                            name->heap) != NULL)
         {
             ret = WOLFSSL_SUCCESS;
         #ifdef OPENSSL_ALL
@@ -12884,8 +12900,8 @@ WOLFSSL_ASN1_OBJECT* wolfSSL_X509_NAME_ENTRY_get_object(
         int ret;
         WOLFSSL_X509_NAME_ENTRY* entry;
         WOLFSSL_ENTER("wolfSSL_X509_NAME_add_entry_by_NID");
-        entry = wolfSSL_X509_NAME_ENTRY_create_by_NID(NULL, nid, type, bytes,
-                len);
+        entry = wolfSSL_X509_NAME_ENTRY_create_by_NID_ex(NULL, nid, type, bytes,
+                len, name->heap);
         if (entry == NULL)
             return WOLFSSL_FAILURE;
         ret = wolfSSL_X509_NAME_add_entry(name, entry, loc, set);

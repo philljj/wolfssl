@@ -4464,10 +4464,14 @@ void InitX509Name(WOLFSSL_X509_NAME* name, int dynamicFlag, void* heap)
     (void)dynamicFlag;
 
     if (name != NULL) {
+        int i = 0;
         XMEMSET(name, 0, sizeof(WOLFSSL_X509_NAME));
         name->name        = name->staticName;
         name->heap = heap;
         name->dynamicName = 0;
+        for (i = 0; i < MAX_NAME_ENTRIES; ++i) {
+            name->entry[i].heap = heap;
+        }
     }
 }
 
