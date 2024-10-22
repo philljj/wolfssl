@@ -18934,7 +18934,7 @@ void* wolfSSL_GetHKDFExtractCtx(WOLFSSL* ssl)
                                                            (obj->obj == NULL)) {
                 if (obj->obj != NULL)
                     XFREE((byte*)obj->obj, NULL, DYNAMIC_TYPE_ASN1);
-                obj->obj = (byte*)XMALLOC(obj->objSz, NULL, DYNAMIC_TYPE_ASN1);
+                obj->obj = (byte*)XMALLOC(obj->objSz, obj->heap, DYNAMIC_TYPE_ASN1);
                 if (obj->obj == NULL) {
                     wolfSSL_ASN1_OBJECT_free(obj);
                     return NULL;
