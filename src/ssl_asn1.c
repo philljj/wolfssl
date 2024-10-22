@@ -2466,9 +2466,8 @@ WOLFSSL_ASN1_STRING* wolfSSL_ASN1_STRING_new_ex(void * heap)
                                          DYNAMIC_TYPE_OPENSSL);
     if (asn1 != NULL) {
         XMEMSET(asn1, 0, sizeof(WOLFSSL_ASN1_STRING));
+        asn1->heap = heap;
     }
-
-    asn1->heap = heap;
 
     return asn1;
 }
