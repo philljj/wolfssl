@@ -221,7 +221,10 @@ enum wolfSSL_ErrorCodes {
     HRR_COOKIE_ERROR             = -505,   /* HRR msg cookie mismatch */
     UNSUPPORTED_CERTIFICATE      = -506,   /* unsupported certificate type */
 
-    WOLFSSL_LAST_E               = -506
+    CRYPTO_POLICY_FORBIDDEN      = -507,   /* operation forbidden by system
+                                            * crypto-policy */
+
+    WOLFSSL_LAST_E               = -507
 };
 
 /* I/O Callback default errors */

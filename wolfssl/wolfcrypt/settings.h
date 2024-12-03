@@ -4172,6 +4172,12 @@ extern void uITRON4_free(void *p) ;
     #error "Please disable DSA if disabling SHA-1"
 #endif
 
+#if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+    #if !defined(WOLFSSL_CRYPTO_POLICY_FILE)
+        #error "WOLFSSL_SYS_CRYPTO_POLICY requires a crypto policy file"
+    #endif /* ! WOLFSSL_CRYPTO_POLICY_FILE */
+#endif /* WOLFSSL_SYS_CRYPTO_POLICY */
+
 /* if configure.ac turned on this feature, HAVE_ENTROPY_MEMUSE will be set,
  * also define HAVE_WOLFENTROPY */
 #ifdef HAVE_ENTROPY_MEMUSE

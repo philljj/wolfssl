@@ -2270,6 +2270,225 @@ int InitSSL_Side(WOLFSSL* ssl, word16 side)
 }
 #endif /* OPENSSL_EXTRA || WOLFSSL_EITHER_SIDE */
 
+#if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+/* Check the wolfssl method meets minimum requirements for
+ * the given security level.
+ *
+ * Returns  0 if method meets security level.
+ * Returns  CRYPTO_POLICY_FORBIDDEN otherwise.
+ * */
+static int wolfSSL_crypto_policy_method_allowed(WOLFSSL_METHOD * method,
+                                                int level)
+{
+    if (level == 0) {
+        /* permissive, no restrictions. */
+        return 0;
+    }
+
+    #ifdef WOLFSSL_DTLS
+    if (method->version.major == DTLS_MAJOR) {
+        if (method->version.minor == DTLS_MINOR) {
+            /* sec level must be 1 or lower. */
+            if (level > 1) {
+                return CRYPTO_POLICY_FORBIDDEN;
+            }
+        }
+    }
+    else
+    #endif /* WOLFSSL_DTLS */
+    {
+        if (method->version.minor == SSLv3_MINOR) {
+            /* sec level must be 0. */
+            if (level > 0) {
+                return CRYPTO_POLICY_FORBIDDEN;
+            }
+        }
+        else if (method->version.minor == TLSv1_MINOR ||
+                 method->version.minor == TLSv1_1_MINOR) {
+            /* sec level must be 1 or lower. */
+            if (level > 1) {
+                return CRYPTO_POLICY_FORBIDDEN;
+            }
+        }
+    }
+
+    /* nothing else to check, all other combinations ok. */
+
+    return 0;
+}
+
+/* Configure the CTX to conform to the security policy.
+ *
+ * Also, check the WOLFSSL_METHOD against the supplied security
+ * level.
+ *
+ * Returns  CRYPTO_POLICY_FORBIDDEN if not allowed per policy.
+ * Returns  BAD_FUNC_ARG on null args.
+ * Returns  0 if ok.
+ * */
+int wolfSSL_crypto_policy_init_ctx(WOLFSSL_CTX * ctx,
+                                   WOLFSSL_METHOD * method)
+{
+    byte         minDowngrade = 0x00;
+    #ifdef WOLFSSL_DTLS
+    int          dtls = 0;
+    #endif /* WOLFSSL_DTLS */
+    int          level = 0;
+    #if !defined(NO_DH) || !defined(NO_RSA)
+    word16       minKeySz = 0; /* minimum DH or RSA key size */
+    #endif /* !NO_DH || !NO_RSA*/
+    #ifdef HAVE_ECC
+    short        minEccKeySz = 0; /* minimum allowed ECC key size */
+    #endif /* HAVE_ECC */
+
+
+    if (ctx == NULL || method == NULL) {
+        return BAD_FUNC_ARG;
+    }
+
+    #ifdef WOLFSSL_DTLS
+    dtls = (method->version.major == DTLS_MAJOR);
+    #endif /* WOLFSSL_DTLS */
+
+    /* get the crypto policy security level. */
+    level = wolfSSL_crypto_policy_get_level();
+
+    if (level < 0 || level > 5) {
+        WOLFSSL_MSG_EX("crypto_policy_init_ctx: invalid level: %d", level);
+        return BAD_FUNC_ARG;
+    }
+
+    /* Check requested method per security level. */
+    if (wolfSSL_crypto_policy_method_allowed(method, level) != 0) {
+        WOLFSSL_MSG_EX("crypto_policy_init_ctx: "
+                       "method=%d, SECLEVEL=%d combination not allowed",
+                       method->version.minor, level);
+        return CRYPTO_POLICY_FORBIDDEN;
+    }
+
+    /* Set appropriate min downgrade per security level. */
+    #ifdef WOLFSSL_DTLS
+    if (dtls) {
+        switch (level) {
+        case 1:
+            minDowngrade = DTLS_MINOR;
+            break;
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+            minDowngrade = DTLSv1_2_MINOR;
+            break;
+        case 0:
+        default:
+            /* Permissive, no restrictions. Allow defaults. */
+            minDowngrade = WOLFSSL_MIN_DTLS_DOWNGRADE;
+            break;
+        }
+    }
+    else
+    #endif /* WOLFSSL_DTLS */
+    {
+        switch (level) {
+        case 1:
+            /* prohibit SSLv3 and lower. */
+            minDowngrade = TLSv1_MINOR;
+            break;
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+            /* prohibit TLSv1_1 and lower. */
+            minDowngrade = TLSv1_2_MINOR;
+            break;
+        case 0:
+        default:
+            ctx->minDowngrade = WOLFSSL_MIN_DOWNGRADE;
+            break;
+        }
+    }
+
+    /* Set min RSA and DH key size. */
+    #if !defined(NO_DH) || !defined(NO_RSA)
+    switch (level) {
+    case 1:
+        minKeySz = 128; /* 1024 bits / 8 */
+        break;
+    case 2:
+        minKeySz = 256; /* 2048 bits / 8 */
+        break;
+    case 3:
+        minKeySz = 384; /* 3072 bits / 8 */
+        break;
+    case 4:
+        minKeySz = 960; /* 7680 bits / 8 */
+        break;
+    case 5:
+        minKeySz = 1920; /* 15360 bits / 8 */
+        break;
+    case 0:
+    default:
+        break;
+    }
+    #endif /* !NO_DH || !NO_RSA*/
+
+    /* Set min ECC key size. */
+    #ifdef HAVE_ECC
+    switch (level) {
+    case 1:
+        minEccKeySz = 20; /* 160 bits / 8 */
+        break;
+    case 2:
+        minEccKeySz = 28; /* 224 bits / 8 */
+        break;
+    case 3:
+        minEccKeySz = 32; /* 256 bits / 8 */
+        break;
+    case 4:
+        minEccKeySz = 48; /* 384 bits / 8 */
+        break;
+    case 5:
+        minEccKeySz = 64; /* 512 bits / 8 */
+        break;
+    default:
+    case 0:
+        break;
+    }
+    #endif /* HAVE_ECC */
+
+    /* Finally set the ctx values. */
+    ctx->minDowngrade = minDowngrade;
+    ctx->secLevel = level;
+    ctx->method = method;
+
+    #if !defined(NO_DH) || !defined(NO_RSA)
+    if (minKeySz > 0) {
+        #ifndef NO_DH
+        if (minKeySz > MAX_DHKEY_SZ) {
+            WOLFSSL_MSG_EX("crypto_policy_init_ctx: minKeySz=%d, "
+                           "but MAX_DHKEY_SZ=%d",
+                           minKeySz, MAX_DHKEY_SZ);
+            return CRYPTO_POLICY_FORBIDDEN;
+        }
+        ctx->minDhKeySz  = minKeySz;
+        ctx->maxDhKeySz  = MAX_DHKEY_SZ;
+        #endif /* NO_DH */
+        #ifndef NO_RSA
+        ctx->minRsaKeySz = minKeySz;
+        #endif /* NO_RSA */
+    }
+    #endif /* !NO_DH || !NO_RSA*/
+
+    #ifdef HAVE_ECC
+    if (minEccKeySz > 0) {
+        ctx->minEccKeySz  = minEccKeySz;
+    }
+    #endif /* HAVE_ECC */
+
+    return 0;
+}
+#endif /* WOLFSSL_SYS_CRYPTO_POLICY */
+
 /* Initialize SSL context, return 0 on success */
 int InitSSL_Ctx(WOLFSSL_CTX* ctx, WOLFSSL_METHOD* method, void* heap)
 {
@@ -2323,6 +2542,7 @@ int InitSSL_Ctx(WOLFSSL_CTX* ctx, WOLFSSL_METHOD* method, void* heap)
 #ifndef NO_RSA
     ctx->minRsaKeySz = MIN_RSAKEY_SZ;
 #endif
+
 #ifdef HAVE_ECC
     ctx->minEccKeySz  = MIN_ECCKEY_SZ;
     ctx->eccTempKeySz = ECDHE_SIZE;
@@ -2546,6 +2766,14 @@ int InitSSL_Ctx(WOLFSSL_CTX* ctx, WOLFSSL_METHOD* method, void* heap)
     /* Should only be set when wolfSSL_CTX_load_system_CA_certs() is called */
     ctx->doAppleNativeCertValidationFlag = 0;
 #endif /* defined(__APPLE__) && defined(WOLFSSL_SYS_CA_CERTS) */
+
+#if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+    ret = wolfSSL_crypto_policy_init_ctx(ctx, method);
+    if (ret != 0) {
+        WOLFSSL_MSG_EX("crypto_policy_init_ctx returned %d", ret);
+        return ret;
+    }
+#endif /* WOLFSSL_SYS_CRYPTO_POLICY */
 
     return ret;
 }
@@ -3249,8 +3477,8 @@ int AllocateSuites(WOLFSSL* ssl)
 void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
                 word16 havePSK, word16 haveDH, word16 haveECDSAsig,
                 word16 haveECC, word16 haveStaticRSA, word16 haveStaticECC,
-                word16 haveFalconSig, word16 haveDilithiumSig, word16 haveAnon,
-                word16 haveNull, int side)
+                word16 haveAnon, word16 haveNull, word16 haveAES128,
+                word16 haveSHA1, word16 haveRC4, int side)
 {
     word16 idx = 0;
     int    tls    = pv.major == SSLv3_MAJOR && pv.minor >= TLSv1_MINOR;
@@ -3286,8 +3514,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
     (void)haveRSAsig; /* non ecc builds won't read */
     (void)haveAnon;   /* anon ciphers optional */
     (void)haveNull;
-    (void)haveFalconSig;
-    (void)haveDilithiumSig;
+    (void)haveAES128;
+    (void)haveSHA1;
+    (void)haveRC4;
 
     if (suites == NULL) {
         WOLFSSL_MSG("InitSuites pointer error");
@@ -3299,7 +3528,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef WOLFSSL_TLS13
 #ifdef BUILD_TLS_AES_128_GCM_SHA256
-    if (tls1_3) {
+    if (tls1_3 && haveAES128) {
         suites->suites[idx++] = TLS13_BYTE;
         suites->suites[idx++] = TLS_AES_128_GCM_SHA256;
     }
@@ -3320,14 +3549,14 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_AES_128_CCM_SHA256
-    if (tls1_3) {
+    if (tls1_3 && haveAES128) {
         suites->suites[idx++] = TLS13_BYTE;
         suites->suites[idx++] = TLS_AES_128_CCM_SHA256;
     }
 #endif
 
 #ifdef BUILD_TLS_AES_128_CCM_8_SHA256
-    if (tls1_3) {
+    if (tls1_3 && haveAES128) {
         suites->suites[idx++] = TLS13_BYTE;
         suites->suites[idx++] = TLS_AES_128_CCM_8_SHA256;
     }
@@ -3394,7 +3623,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveECC) {
+    if (tls1_2 && haveECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
     }
@@ -3414,9 +3643,10 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
     #ifdef OPENSSL_EXTRA
-    if ((tls1_2 && haveRSA) || (tls1_2 && haveECDSAsig)) {
+    if ((tls1_2 && haveRSA && haveAES128) ||
+        (tls1_2 && haveECDSAsig && haveAES128)) {
     #else
-    if (tls1_2 && haveRSA) {
+    if (tls1_2 && haveRSA && haveAES128) {
     #endif
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
@@ -3431,7 +3661,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveDH && haveRSA) {
+    if (tls1_2 && haveDH && haveRSA && haveAES128) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
     }
@@ -3445,7 +3675,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveRSA && haveStaticRSA) {
+    if (tls1_2 && haveRSA && haveStaticRSA && haveAES128) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_AES_128_GCM_SHA256;
     }
@@ -3459,7 +3689,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveECC && haveStaticECC) {
+    if (tls1_2 && haveECC && haveStaticECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256;
     }
@@ -3473,7 +3703,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveRSAsig && haveStaticECC) {
+    if (tls1_2 && haveRSAsig && haveStaticECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256;
     }
@@ -3487,7 +3717,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256
-    if (tls1_2 && haveECC) {
+    if (tls1_2 && haveECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256;
     }
@@ -3501,7 +3731,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_DH_anon_WITH_AES_128_CBC_SHA
-    if (tls1_2 && haveDH && haveAnon) {
+    if (tls1_2 && haveDH && haveAnon && haveAES128 && haveSHA1) {
       suites->suites[idx++] = CIPHER_BYTE;
       suites->suites[idx++] = TLS_DH_anon_WITH_AES_128_CBC_SHA;
     }
@@ -3515,7 +3745,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_DHE_PSK_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && haveDH && havePSK) {
+    if (tls1_2 && haveDH && havePSK && haveAES128) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_PSK_WITH_AES_128_GCM_SHA256;
     }
@@ -3529,7 +3759,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_PSK_WITH_AES_128_GCM_SHA256
-    if (tls1_2 && havePSK) {
+    if (tls1_2 && havePSK && haveAES128) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_PSK_WITH_AES_128_GCM_SHA256;
     }
@@ -3563,7 +3793,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 /* Place as higher priority for MYSQL */
 #if defined(WOLFSSL_MYSQL_COMPATIBLE)
 #ifdef BUILD_TLS_DHE_RSA_WITH_AES_256_CBC_SHA
-    if (tls && haveDH && haveRSA) {
+    if (tls && haveDH && haveRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_AES_256_CBC_SHA;
     }
@@ -3572,9 +3802,10 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
     #ifdef OPENSSL_EXTRA
-    if ((tls1_2 && haveRSA) || (tls1_2 && haveECDSAsig)) {
+    if ((tls1_2 && haveRSA && haveAES128) ||
+        (tls1_2 && haveECDSAsig && haveAES128)) {
     #else
-    if (tls1_2 && haveRSA) {
+    if (tls1_2 && haveRSA && haveAES128) {
     #endif
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256;
@@ -3582,21 +3813,21 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
-    if (tls1_2 && haveECC) {
+    if (tls1_2 && haveECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256
-    if (tls1_2 && haveRSAsig && haveStaticECC) {
+    if (tls1_2 && haveRSAsig && haveStaticECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256
-    if (tls1_2 && haveECC && haveStaticECC) {
+    if (tls1_2 && haveECC && haveStaticECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256;
     }
@@ -3635,56 +3866,56 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
-    if (tls && haveECC) {
+    if (tls && haveECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA
-    if (tls && haveECC && haveStaticECC) {
+    if (tls && haveECC && haveStaticECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
-    if (tls && haveECC) {
+    if (tls && haveECC && haveAES128 && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA
-    if (tls && haveECC && haveStaticECC) {
+    if (tls && haveECC && haveStaticECC && haveAES128 && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
-    if (!dtls && tls && haveECC) {
+    if (!dtls && tls && haveECC && haveSHA1 && haveRC4) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_RC4_128_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_RC4_128_SHA
-    if (!dtls && tls && haveECC && haveStaticECC) {
+    if (!dtls && tls && haveECC && haveStaticECC && haveSHA1 && haveRC4) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_RC4_128_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA
-    if (tls && haveECC) {
+    if (tls && haveECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA
-    if (tls && haveECC && haveStaticECC) {
+    if (tls && haveECC && haveStaticECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA;
     }
@@ -3692,9 +3923,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
     #ifdef OPENSSL_EXTRA
-    if ((tls && haveRSA) || (tls && haveECDSAsig)) {
+    if ((tls && haveRSA && haveSHA1) || (tls && haveECDSAsig && haveSHA1)) {
     #else
-    if (tls && haveRSA) {
+    if (tls && haveRSA && haveSHA1) {
     #endif
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA;
@@ -3702,7 +3933,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_AES_256_CBC_SHA
-    if (tls && haveRSAsig && haveStaticECC) {
+    if (tls && haveRSAsig && haveStaticECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_AES_256_CBC_SHA;
     }
@@ -3710,9 +3941,10 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
     #ifdef OPENSSL_EXTRA
-    if ((tls && haveRSA) || (tls && haveECDSAsig)) {
+    if ((tls && haveRSA && haveAES128 && haveSHA1) ||
+        (tls && haveECDSAsig && haveAES128 && haveSHA1)) {
     #else
-    if (tls && haveRSA) {
+    if (tls && haveRSA && haveAES128 && haveSHA1) {
     #endif
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA;
@@ -3720,21 +3952,21 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_AES_128_CBC_SHA
-    if (tls && haveRSAsig && haveStaticECC) {
+    if (tls && haveRSAsig && haveStaticECC && haveAES128 && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_AES_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_RC4_128_SHA
-    if (!dtls && tls && haveRSA) {
+    if (!dtls && tls && haveRSA && haveSHA1 && haveRC4) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_RC4_128_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_RC4_128_SHA
-    if (!dtls && tls && haveRSAsig && haveStaticECC) {
+    if (!dtls && tls && haveRSAsig && haveStaticECC && haveSHA1 && haveRC4) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_RC4_128_SHA;
     }
@@ -3742,9 +3974,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
     #ifdef OPENSSL_EXTRA
-    if ((tls && haveRSA) || (tls && haveECDSAsig)) {
+    if ((tls && haveRSA && haveSHA1) || (tls && haveECDSAsig && haveSHA1)) {
     #else
-    if (tls && haveRSA) {
+    if (tls && haveRSA && haveSHA1) {
     #endif
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA;
@@ -3752,21 +3984,21 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA
-    if (tls && haveRSAsig && haveStaticECC) {
+    if (tls && haveRSAsig && haveStaticECC && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_128_CCM
-    if (tls1_2 && haveECC) {
+    if (tls1_2 && haveECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_128_CCM;
     }
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
-    if (tls1_2 && haveECC) {
+    if (tls1_2 && haveECC && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
     }
@@ -3780,7 +4012,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_AES_128_CCM_8
-    if (tls1_2 && haveRSA && haveStaticRSA) {
+    if (tls1_2 && haveRSA && haveStaticRSA && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_AES_128_CCM_8;
     }
@@ -3807,9 +4039,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && haveDH && haveRSA)
+    if (tls1_2 && haveDH && haveRSA && haveAES128)
 #else
-    if (tls && haveDH && haveRSA)
+    if (tls && haveDH && haveRSA && haveAES128)
 #endif
     {
         suites->suites[idx++] = CIPHER_BYTE;
@@ -3820,7 +4052,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 /* Place as higher priority for MYSQL testing */
 #if !defined(WOLFSSL_MYSQL_COMPATIBLE)
 #ifdef BUILD_TLS_DHE_RSA_WITH_AES_256_CBC_SHA
-    if (tls && haveDH && haveRSA) {
+    if (tls && haveDH && haveRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_AES_256_CBC_SHA;
     }
@@ -3828,14 +4060,14 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_AES_128_CBC_SHA
-    if (tls && haveDH && haveRSA) {
+    if (tls && haveDH && haveRSA && haveAES128 && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA
-    if (tls && haveDH && haveRSA) {
+    if (tls && haveDH && haveRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA;
     }
@@ -3855,9 +4087,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_RSA_WITH_AES_128_CBC_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && haveRSA && haveStaticRSA)
+    if (tls1_2 && haveRSA && haveStaticRSA && haveAES128)
 #else
-    if (tls && haveRSA && haveStaticRSA)
+    if (tls && haveRSA && haveStaticRSA && haveAES128)
 #endif
     {
         suites->suites[idx++] = CIPHER_BYTE;
@@ -3866,14 +4098,14 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_AES_256_CBC_SHA
-    if (tls && haveRSA && haveStaticRSA) {
+    if (tls && haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_AES_256_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_AES_128_CBC_SHA
-    if (tls && haveRSA && haveStaticRSA) {
+    if (tls && haveRSA && haveStaticRSA && haveAES128 && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_AES_128_CBC_SHA;
     }
@@ -3910,7 +4142,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_ECDHE_ECDSA_WITH_NULL_SHA
-    if (tls && haveECC && haveNull) {
+    if (tls && haveECC && haveNull && haveSHA1) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_ECDHE_ECDSA_WITH_NULL_SHA;
     }
@@ -3924,7 +4156,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_NULL_SHA
-    if (tls && haveRSA && haveNull && haveStaticRSA) {
+    if (tls && haveRSA && haveNull && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_NULL_SHA;
     }
@@ -3943,7 +4175,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_PSK_WITH_AES_256_CBC_SHA
-    if (tls && havePSK) {
+    if (tls && havePSK && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_PSK_WITH_AES_256_CBC_SHA;
     }
@@ -3975,9 +4207,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_DHE_PSK_WITH_AES_128_CBC_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && haveDH && havePSK)
+    if (tls1_2 && haveDH && havePSK && haveAES128)
 #else
-    if (tls && haveDH && havePSK)
+    if (tls && haveDH && havePSK && haveAES128)
 #endif
     {
         suites->suites[idx++] = CIPHER_BYTE;
@@ -3987,9 +4219,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_PSK_WITH_AES_128_CBC_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && havePSK)
+    if (tls1_2 && havePSK && haveAES128)
 #else
-    if (tls1 && havePSK)
+    if (tls1 && havePSK && haveAES128)
 #endif
     {
         suites->suites[idx++] = CIPHER_BYTE;
@@ -3998,14 +4230,14 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_PSK_WITH_AES_128_CBC_SHA
-    if (tls && havePSK) {
+    if (tls && havePSK && haveAES128 && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_PSK_WITH_AES_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_DHE_PSK_WITH_AES_128_CCM
-    if (tls && haveDH && havePSK) {
+    if (tls && haveDH && havePSK && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_DHE_PSK_WITH_AES_128_CCM;
     }
@@ -4056,9 +4288,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && havePSK)
+    if (tls1_2 && havePSK && haveAES128)
 #else
-    if (tls && havePSK)
+    if (tls && havePSK && haveAES128)
 #endif
     {
         suites->suites[idx++] = ECC_BYTE;
@@ -4068,9 +4300,9 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 
 #ifdef BUILD_TLS_ECDHE_PSK_WITH_AES_128_GCM_SHA256
 #ifndef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
-    if (tls1_2 && havePSK)
+    if (tls1_2 && havePSK && haveAES128)
 #else
-    if (tls && havePSK)
+    if (tls && havePSK && haveAES128)
 #endif
     {
         suites->suites[idx++] = ECDHE_PSK_BYTE;
@@ -4079,7 +4311,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_PSK_WITH_AES_128_CCM
-    if (tls && havePSK) {
+    if (tls && havePSK && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_PSK_WITH_AES_128_CCM;
     }
@@ -4093,7 +4325,7 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_TLS_PSK_WITH_AES_128_CCM_8
-    if (tls && havePSK) {
+    if (tls && havePSK && haveAES128) {
         suites->suites[idx++] = ECC_BYTE;
         suites->suites[idx++] = TLS_PSK_WITH_AES_128_CCM_8;
     }
@@ -4174,49 +4406,49 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
 #endif
 
 #ifdef BUILD_SSL_RSA_WITH_RC4_128_SHA
-    if (!dtls && haveRSA && haveStaticRSA) {
+    if (!dtls && haveRSA && haveStaticRSA && haveSHA1 && haveRC4) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = SSL_RSA_WITH_RC4_128_SHA;
     }
 #endif
 
 #ifdef BUILD_SSL_RSA_WITH_RC4_128_MD5
-    if (!dtls && haveRSA && haveStaticRSA) {
+    if (!dtls && haveRSA && haveStaticRSA && haveRC4) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = SSL_RSA_WITH_RC4_128_MD5;
     }
 #endif
 
 #ifdef BUILD_SSL_RSA_WITH_3DES_EDE_CBC_SHA
-    if (haveRSA && haveStaticRSA) {
+    if (haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = SSL_RSA_WITH_3DES_EDE_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_CAMELLIA_128_CBC_SHA
-    if (tls && haveRSA && haveStaticRSA) {
+    if (tls && haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_CAMELLIA_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA
-    if (tls && haveDH && haveRSA && haveStaticRSA) {
+    if (tls && haveDH && haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_RSA_WITH_CAMELLIA_256_CBC_SHA
-    if (tls && haveRSA && haveStaticRSA) {
+    if (tls && haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_RSA_WITH_CAMELLIA_256_CBC_SHA;
     }
 #endif
 
 #ifdef BUILD_TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA
-    if (tls && haveDH && haveRSA && haveStaticRSA) {
+    if (tls && haveDH && haveRSA && haveStaticRSA && haveSHA1) {
         suites->suites[idx++] = CIPHER_BYTE;
         suites->suites[idx++] = TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA;
     }
@@ -4313,8 +4545,6 @@ void InitSuites(Suites* suites, ProtocolVersion pv, int keySz, word16 haveRSA,
     (void)haveRSAsig; /* non ecc builds won't read */
     (void)haveAnon;   /* anon ciphers optional */
     (void)haveNull;
-    (void)haveFalconSig;
-    (void)haveDilithiumSig;
 }
 
 #if !defined(NO_WOLFSSL_SERVER) || !defined(NO_CERTS) || \
@@ -6422,19 +6652,19 @@ int wolfSSL_CTX_IsPrivatePkSet(WOLFSSL_CTX* ctx)
 static void InitSuites_EitherSide(Suites* suites, ProtocolVersion pv, int keySz,
         word16 haveRSA, word16 havePSK, word16 haveDH, word16 haveECDSAsig,
         word16 haveECC, word16 haveStaticECC,
-        word16 haveFalconSig, word16 haveDilithiumSig, word16 haveAnon,
+        word16 haveAnon,
         int side)
 {
     /* make sure server has DH params, and add PSK if there */
     if (side == WOLFSSL_SERVER_END) {
         InitSuites(suites, pv, keySz, haveRSA, havePSK, haveDH, haveECDSAsig,
-                   haveECC, TRUE, haveStaticECC, haveFalconSig,
-                   haveDilithiumSig, haveAnon, TRUE, side);
+                   haveECC, TRUE, haveStaticECC,
+                   haveAnon, TRUE, TRUE, TRUE, TRUE, side);
     }
     else {
         InitSuites(suites, pv, keySz, haveRSA, havePSK, TRUE, haveECDSAsig,
-                   haveECC, TRUE, haveStaticECC, haveFalconSig,
-                   haveDilithiumSig, haveAnon, TRUE, side);
+                   haveECC, TRUE, haveStaticECC,
+                   haveAnon, TRUE, TRUE, TRUE, TRUE, side);
     }
 }
 
@@ -6458,7 +6688,7 @@ void InitSSL_CTX_Suites(WOLFSSL_CTX* ctx)
 #endif
     InitSuites_EitherSide(ctx->suites, ctx->method->version, keySz,
             haveRSA, havePSK, ctx->haveDH, ctx->haveECDSAsig, ctx->haveECC,
-            ctx->haveStaticECC, ctx->haveFalconSig, ctx->haveDilithiumSig,
+            ctx->haveStaticECC,
             haveAnon, ctx->method->side);
 }
 
@@ -6513,7 +6743,6 @@ int InitSSL_Suites(WOLFSSL* ssl)
         InitSuites_EitherSide(ssl->suites, ssl->version, keySz, haveRSA,
                 havePSK, ssl->options.haveDH, ssl->options.haveECDSAsig,
                 ssl->options.haveECC, ssl->options.haveStaticECC,
-                ssl->options.haveFalconSig, ssl->options.haveDilithiumSig,
                 ssl->options.useAnon, ssl->options.side);
     }
 
@@ -7754,6 +7983,9 @@ int InitSSL(WOLFSSL* ssl, WOLFSSL_CTX* ctx, int writeDup)
     ssl->response_idx = 0;
 #endif
 #endif
+#if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+    ssl->secLevel = ctx->secLevel;
+#endif /* WOLFSSL_SYS_CRYPTO_POLICY */
     /* Returns 0 on success, not WOLFSSL_SUCCESS (1) */
     WOLFSSL_MSG_EX("InitSSL done. return 0 (success)");
     return 0;
@@ -25865,6 +26097,9 @@ const char* wolfSSL_ERR_reason_error_string(unsigned long e)
     case CRL_MISSING:
         return "CRL missing, not loaded";
 
+    case CRYPTO_POLICY_FORBIDDEN:
+        return "Operation forbidden by system crypto-policy";
+
     case MONITOR_SETUP_E:
         return "CRL monitor setup error";
 
@@ -27265,6 +27500,9 @@ static int ParseCipherList(Suites* suites,
     word16    haveNull         = 1; /* allowed by default if compiled in */
     int       callInitSuites   = 0;
     word16    havePSK          = 0;
+    word16    haveAES128       = 1; /* allowed by default if compiled in */
+    word16    haveSHA1         = 1; /* allowed by default if compiled in */
+    word16    haveRC4          = 1; /* allowed by default if compiled in */
 #endif
     const int suiteSz       = GetCipherNamesSize();
     const char* next        = list;
@@ -27289,8 +27527,8 @@ static int ParseCipherList(Suites* suites,
 #else
                 0,
 #endif
-                haveRSA, 1, 1, !haveRSA, 1, haveRSA, !haveRSA, 1, 1, 0, 0,
-                side
+                haveRSA, 1, 1, !haveRSA, 1, haveRSA, !haveRSA, 0, 0, 1,
+                1, 1, side
         );
         return 1; /* wolfSSL default */
     }
@@ -27491,6 +27729,29 @@ static int ParseCipherList(Suites* suites,
             continue;
         }
 
+        #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+        if (XSTRCMP(name, "AES128") == 0) {
+            haveAES128 = allowing;
+            callInitSuites = 1;
+            ret = 1;
+            continue;
+        }
+
+        if (XSTRCMP(name, "SHA1") == 0) {
+            haveSHA1 = allowing;
+            callInitSuites = 1;
+            ret = 1;
+            continue;
+        }
+
+        if (XSTRCMP(name, "RC4") == 0) {
+            haveRC4 = allowing;
+            callInitSuites = 1;
+            ret = 1;
+            continue;
+        }
+        #endif /* WOLFSSL_SYS_CRYPTO_POLICY */
+
         if (XSTRCMP(name, "LOW") == 0 || XSTRCMP(name, "MEDIUM") == 0) {
             /* No way to limit or allow low bit sizes */
             if (allowing) {
@@ -27512,6 +27773,14 @@ static int ParseCipherList(Suites* suites,
             /* wolfSSL doesn't support "export" ciphers. We can skip this */
             continue;
         }
+
+        #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+        if (XSTRNCMP(name, WOLFSSL_SECLEVEL_STR,
+                     strlen(WOLFSSL_SECLEVEL_STR)) == 0) {
+            /* Skip the "@SECLEVEL=N" string, we'll process it elsewhere. */
+            continue;
+        }
+        #endif /* WOLFSSL_SYS_CRYPTO_POLICY */
     #endif /* OPENSSL_EXTRA */
 
         for (i = 0; i < suiteSz; i++) {
@@ -27651,10 +27920,9 @@ static int ParseCipherList(Suites* suites,
                        (word16)((haveSig & SIG_ECDSA) != 0),
                        (word16)haveECC, (word16)haveStaticRSA,
                        (word16)haveStaticECC,
-                       (word16)((haveSig & SIG_FALCON) != 0),
-                       (word16)((haveSig & SIG_DILITHIUM) != 0),
                        (word16)((haveSig & SIG_ANON) != 0),
-                       (word16)haveNull, side);
+                       (word16)haveNull, (word16)haveAES128,
+                       (word16)haveSHA1, (word16)haveRC4, side);
             /* Restore user ciphers ahead of defaults */
             XMEMMOVE(suites->suites + idx, suites->suites,
                     min(suites->suiteSz, WOLFSSL_MAX_SUITE_SZ-idx));
@@ -27665,7 +27933,7 @@ static int ParseCipherList(Suites* suites,
         {
             suites->suiteSz   = (word16)idx;
             InitSuitesHashSigAlgo(suites->hashSigAlgo, haveSig, 1, keySz,
-                 &suites->hashSigAlgoSz);
+                                  &suites->hashSigAlgoSz);
         }
 
 #ifdef HAVE_RENEGOTIATION_INDICATION
@@ -36810,9 +37078,8 @@ static int DoSessionTicket(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
             InitSuites(ssl->suites, ssl->version, keySz, haveRSA, havePSK,
                        ssl->options.haveDH, ssl->options.haveECDSAsig,
                        ssl->options.haveECC, TRUE, ssl->options.haveStaticECC,
-                       ssl->options.haveFalconSig,
-                       ssl->options.haveDilithiumSig, ssl->options.useAnon,
-                       TRUE, ssl->options.side);
+                       ssl->options.useAnon,
+                       TRUE, TRUE, TRUE, TRUE, ssl->options.side);
         }
 
         /* suite size */
@@ -37242,9 +37509,8 @@ static int DoSessionTicket(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
             InitSuites(ssl->suites, ssl->version, keySz, haveRSA, havePSK,
                        ssl->options.haveDH, ssl->options.haveECDSAsig,
                        ssl->options.haveECC, TRUE, ssl->options.haveStaticECC,
-                       ssl->options.haveFalconSig,
-                       ssl->options.haveDilithiumSig, ssl->options.useAnon,
-                       TRUE, ssl->options.side);
+                       ssl->options.useAnon,
+                       TRUE, TRUE, TRUE, TRUE, ssl->options.side);
         }
 
         /* check if option is set to not allow the current version
@@ -37320,9 +37586,8 @@ static int DoSessionTicket(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
                 InitSuites(ssl->suites, ssl->version, keySz, haveRSA, havePSK,
                            ssl->options.haveDH, ssl->options.haveECDSAsig,
                            ssl->options.haveECC, TRUE, ssl->options.haveStaticECC,
-                           ssl->options.haveFalconSig,
-                           ssl->options.haveDilithiumSig, ssl->options.useAnon,
-                           TRUE, ssl->options.side);
+                           ssl->options.useAnon,
+                           TRUE, TRUE, TRUE, TRUE, ssl->options.side);
             }
         }
 
