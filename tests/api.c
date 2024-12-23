@@ -70983,7 +70983,7 @@ static int test_wolfSSL_BIO_datagram(void)
     ExpectIntEQ((int)wolfSSL_BIO_ctrl(bio2, BIO_CTRL_DGRAM_SET_CONNECTED, 0, NULL), WOLFSSL_SUCCESS);
 
     if (EXPECT_SUCCESS()) {
-        sin2.sin_addr.s_addr = htonl(0xc0a8c0a8); /* 192.168.192.168 -- invalid for loopback interface. */
+        sin2.sin_addr.s_addr = htonl(0xfefefefe); /* 254.254.254.254 -- invalid for loopback interface. */
         XMEMCPY(&bio_addr2->sa_in, &sin2, sizeof(sin2));
         ExpectIntEQ((int)wolfSSL_BIO_ctrl(bio1, BIO_CTRL_DGRAM_SET_PEER, 0, bio_addr2), WOLFSSL_SUCCESS);
         wolfSSL_BIO_ADDR_clear(bio_addr2);
