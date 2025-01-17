@@ -1532,9 +1532,14 @@ static void ProcessBufferCertSetHave(WOLFSSL_CTX* ctx, WOLFSSL* ssl,
             break;
     #endif
     #ifdef HAVE_DILITHIUM
+        #ifdef WOLFSSL_DILITHIUM_FIPS204_DRAFT
         case CTC_DILITHIUM_LEVEL2:
         case CTC_DILITHIUM_LEVEL3:
         case CTC_DILITHIUM_LEVEL5:
+        #endif
+        case CTC_ML_DSA_LEVEL2:
+        case CTC_ML_DSA_LEVEL3:
+        case CTC_ML_DSA_LEVEL5:
             WOLFSSL_MSG("Dilithium cert signature");
             if (ssl) {
                 ssl->options.haveDilithiumSig = 1;
@@ -1705,6 +1710,7 @@ static int ProcessBufferCertPublicKey(WOLFSSL_CTX* ctx, WOLFSSL* ssl,
             break;
     #endif /* HAVE_FALCON */
     #if defined(HAVE_DILITHIUM)
+        #ifdef WOLFSSL_DILITHIUM_FIPS204_DRAFT
         case DILITHIUM_LEVEL2k:
             keyType = dilithium_level2_sa_algo;
             /* Dilithium is fixed key size */
@@ -1729,6 +1735,37 @@ static int ProcessBufferCertPublicKey(WOLFSSL_CTX* ctx, WOLFSSL* ssl,
             keyType = dilithium_level5_sa_algo;
             /* Dilithium is fixed key size */
             keySz = DILITHIUM_LEVEL5_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        #endif /* WOLFSSL_DILITHIUM_FIPS204_DRAFT */
+        case ML_DSA_LEVEL2k:
+            keyType = dilithium_level2_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL2_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        case ML_DSA_LEVEL3k:
+            keyType = dilithium_level3_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL3_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        case ML_DSA_LEVEL5k:
+            keyType = dilithium_level5_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL5_KEY_SIZE;
             if (checkKeySz) {
                 ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
                     ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
@@ -1894,6 +1931,7 @@ static int ProcessBufferCertAltPublicKey(WOLFSSL_CTX* ctx, WOLFSSL* ssl,
             break;
     #endif /* HAVE_FALCON */
     #if defined(HAVE_DILITHIUM)
+        #ifdef WOLFSSL_DILITHIUM_FIPS204_DRAFT
         case DILITHIUM_LEVEL2k:
             keyType = dilithium_level2_sa_algo;
             /* Dilithium is fixed key size */
@@ -1918,6 +1956,37 @@ static int ProcessBufferCertAltPublicKey(WOLFSSL_CTX* ctx, WOLFSSL* ssl,
             keyType = dilithium_level5_sa_algo;
             /* Dilithium is fixed key size */
             keySz = DILITHIUM_LEVEL5_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        #endif /* WOLFSSL_DILITHIUM_FIPS204_DRAFT */
+        case ML_DSA_LEVEL2k:
+            keyType = dilithium_level2_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL2_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        case ML_DSA_LEVEL3k:
+            keyType = dilithium_level3_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL3_KEY_SIZE;
+            if (checkKeySz) {
+                ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
+                    ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
+                    DILITHIUM_KEY_SIZE_E);
+            }
+            break;
+        case ML_DSA_LEVEL5k:
+            keyType = dilithium_level5_sa_algo;
+            /* Dilithium is fixed key size */
+            keySz = ML_DSA_LEVEL5_KEY_SIZE;
             if (checkKeySz) {
                 ret = CHECK_KEY_SZ(ssl ? ssl->options.minDilithiumKeySz :
                     ctx->minDilithiumKeySz, DILITHIUM_MAX_KEY_SIZE, keySz,
