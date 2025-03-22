@@ -1318,6 +1318,7 @@ static int linuxkm_test_rsa(void)
  * */
 static int km_RsaEnc(struct akcipher_request *req)
 {
+    (void) req;
     return 0;
 }
 
@@ -1326,6 +1327,7 @@ static int km_RsaEnc(struct akcipher_request *req)
  * */
 static int km_RsaDec(struct akcipher_request *req)
 {
+    (void) req;
     return 0;
 }
 
@@ -1339,6 +1341,9 @@ static int km_RsaDec(struct akcipher_request *req)
 static int km_RsaSet_priv_key(struct crypto_akcipher *tfm, const void *key,
                               unsigned int keylen)
 {
+    (void) tfm;
+    (void) key;
+    (void) keylen;
     return 0;
 }
 
@@ -1352,6 +1357,9 @@ static int km_RsaSet_priv_key(struct crypto_akcipher *tfm, const void *key,
 static int km_RsaSet_pub_key(struct crypto_akcipher *tfm, const void *key,
                               unsigned int keylen)
 {
+    (void) tfm;
+    (void) key;
+    (void) keylen;
     return 0;
 }
 
@@ -1360,6 +1368,7 @@ static int km_RsaSet_pub_key(struct crypto_akcipher *tfm, const void *key,
  * */
 static unsigned int km_RsaMax_size(struct crypto_akcipher *tfm)
 {
+    (void) tfm;
     return 0;
 }
 
@@ -1370,11 +1379,13 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
 {
     /* Malloc and set the RNG here?*/
     /* wc_RsaSetRNG */
+    (void) tfm;
     return 0;
 }
 
 static void km_RsaExit(struct crypto_akcipher *tfm)
 {
+    (void) tfm;
     return;
 }
 
