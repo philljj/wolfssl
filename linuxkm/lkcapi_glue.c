@@ -3416,5 +3416,12 @@ static void linuxkm_lkcapi_unregister(void)
     UNREGISTER_ALG(xtsAesAlg, crypto_unregister_skcipher);
 #endif
 
+#if !defined(NO_RSA) && \
+    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+     defined(LINUXKM_LKCAPI_REGISTER_RSA))
+
+    UNREGISTER_ALG(rsaAlg, crypto_unregister_akcipher);
+#endif
+
 #undef UNREGISTER_ALG
 }
