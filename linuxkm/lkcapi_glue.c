@@ -1306,7 +1306,35 @@ static int xtsAesAlg_loaded = 0;
 
 static int linuxkm_test_rsa(void)
 {
-    int ret = 0;
+    int                       ret = 0;
+    struct crypto_akcipher *  tfm = NULL;
+    struct akcipher_request * req = NULL;
+    //struct scatterlist        src, dst;
+
+    tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
+    if (IS_ERR(tfm)) {
+        pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
+               WOLFKM_RSA_DRIVER, PTR_ERR(tfm));
+        goto test_rsa_end;
+    }
+
+    req = akcipher_request_alloc(tfm, GFP_KERNEL);
+    if (IS_ERR(req)) {
+        pr_err("error: allocating akcipher request %s failed\n",
+               WOLFKM_RSA_DRIVER);
+        goto test_rsa_end;
+    }
+
+test_rsa_end:
+    if (req) {
+        akcipher_request_free(req);
+        req = NULL;
+    }
+
+    if (tfm) {
+        crypto_free_akcipher(tfm);
+        tfm = NULL;
+    }
 
     return ret;
 }
@@ -1391,8 +1419,8 @@ static void km_RsaExit(struct crypto_akcipher *tfm)
 
 
 static struct akcipher_alg rsaAlg = {
-    .base.cra_name        = "rsa",
-    .base.cra_driver_name = "rsa-generic",
+    .base.cra_name        = WOLFKM_RSA_NAME,
+    .base.cra_driver_name = WOLFKM_RSA_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct RsaKey),
