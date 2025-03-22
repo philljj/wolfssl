@@ -57,6 +57,7 @@ static int disable_setkey_warnings = 0;
 #define WOLFKM_AESCFB_NAME   "cfb(aes)"
 #define WOLFKM_AESGCM_NAME   "gcm(aes)"
 #define WOLFKM_AESXTS_NAME   "xts(aes)"
+#define WOLFKM_RSA_NAME      "rsa"
 
 #ifdef WOLFSSL_AESNI
     #define WOLFKM_DRIVER_ISA_EXT "-aesni"
@@ -85,6 +86,7 @@ static int disable_setkey_warnings = 0;
 #define WOLFKM_AESCFB_DRIVER ("cfb-aes" WOLFKM_DRIVER_SUFFIX)
 #define WOLFKM_AESGCM_DRIVER ("gcm-aes" WOLFKM_DRIVER_SUFFIX)
 #define WOLFKM_AESXTS_DRIVER ("xts-aes" WOLFKM_DRIVER_SUFFIX)
+#define WOLFKM_RSA_DRIVER    ("rsa" WOLFKM_DRIVER_SUFFIX)
 
 #ifdef WOLFSSL_DEBUG_TRACE_ERROR_CODES
     enum linux_errcodes {
@@ -1294,6 +1296,108 @@ static int xtsAesAlg_loaded = 0;
 
 #endif /* WOLFSSL_AES_XTS &&
         * (LINUXKM_LKCAPI_REGISTER_ALL || LINUXKM_LKCAPI_REGISTER_AESXTS)
+        */
+
+#if !defined(NO_RSA) && \
+    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+     defined(LINUXKM_LKCAPI_REGISTER_RSA))
+
+#include <wolfssl/wolfcrypt/rsa.h>
+
+static int linuxkm_test_rsa(void)
+{
+    int ret = 0;
+
+    return ret;
+}
+
+
+
+/**
+ * RSA encrypt with public key.
+ * */
+static int km_RsaEnc(struct akcipher_request *req)
+{
+    return 0;
+}
+
+/**
+ * RSA decrypt with public key.
+ * */
+static int km_RsaDec(struct akcipher_request *req)
+{
+    return 0;
+}
+
+/**
+ * Decodes and sets the RSA private key.
+ *
+ * param tfm     the crypto_akcipher transform
+ * param key     BER encoded private key and parameters
+ * param keylen  key length
+ * */
+static int km_RsaSet_priv_key(struct crypto_akcipher *tfm, const void *key,
+                              unsigned int keylen)
+{
+    return 0;
+}
+
+/**
+ * Decodes and sets the RSA pub key.
+ *
+ * param tfm     the crypto_akcipher transform
+ * param key     BER encoded pub key and parameters
+ * param keylen  key length
+ * */
+static int km_RsaSet_pub_key(struct crypto_akcipher *tfm, const void *key,
+                              unsigned int keylen)
+{
+    return 0;
+}
+
+/**
+ * Returns dest buffer size required for key.
+ * */
+static unsigned int km_RsaMax_size(struct crypto_akcipher *tfm)
+{
+    return 0;
+}
+
+/**
+ *
+ * */
+static int km_RsaInit(struct crypto_akcipher *tfm)
+{
+    /* Malloc and set the RNG here?*/
+    /* wc_RsaSetRNG */
+    return 0;
+}
+
+static void km_RsaExit(struct crypto_akcipher *tfm)
+{
+    return;
+}
+
+
+static struct akcipher_alg rsaAlg = {
+    .base.cra_name        = "rsa",
+    .base.cra_driver_name = "rsa-generic",
+    .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+    .base.cra_module      = THIS_MODULE,
+    .base.cra_ctxsize     = sizeof(struct RsaKey),
+    .encrypt              = km_RsaEnc,
+    .decrypt              = km_RsaDec,
+    .set_priv_key         = km_RsaSet_priv_key,
+    .set_pub_key          = km_RsaSet_pub_key,
+    .max_size             = km_RsaMax_size,
+    .init                 = km_RsaInit,
+    .exit                 = km_RsaExit,
+};
+
+static int rsaAlg_loaded = 0;
+
+#endif /* !NO_RSA &&
+        * (LINUXKM_LKCAPI_REGISTER_ALL || LINUXKM_LKCAPI_REGISTER_RSA)
         */
 
 /* cipher tests, cribbed from test.c, with supplementary LKCAPI tests: */
@@ -3214,6 +3318,13 @@ static int linuxkm_lkcapi_register(void)
      defined(LINUXKM_LKCAPI_REGISTER_AESXTS))
 
     REGISTER_ALG(xtsAesAlg, crypto_register_skcipher, linuxkm_test_aesxts);
+#endif
+
+#if !defined(NO_RSA) && \
+    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+     defined(LINUXKM_LKCAPI_REGISTER_RSA))
+
+    REGISTER_ALG(rsaAlg, crypto_register_akcipher, linuxkm_test_rsa);
 #endif
 
 #undef REGISTER_ALG
