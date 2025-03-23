@@ -1304,6 +1304,11 @@ static int xtsAesAlg_loaded = 0;
 
 #include <wolfssl/wolfcrypt/rsa.h>
 
+struct km_RsaCtx {
+    RsaKey * key;
+    WC_RNG   rng; /* needed for padding */
+};
+
 static int linuxkm_test_rsa(void)
 {
     int                       ret = 0;
@@ -1360,7 +1365,6 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
     init_key = 1;
-
 
     ret = wc_RsaSetRNG(key, &rng);
     if (ret) {
@@ -1506,7 +1510,7 @@ static int km_RsaDec(struct akcipher_request *req)
  * param key     BER encoded private key and parameters
  * param keylen  key length
  * */
-static int km_RsaSet_priv_key(struct crypto_akcipher *tfm, const void *key,
+static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
                               unsigned int keylen)
 {
     (void) tfm;
@@ -1522,9 +1526,12 @@ static int km_RsaSet_priv_key(struct crypto_akcipher *tfm, const void *key,
  * param key     BER encoded pub key and parameters
  * param keylen  key length
  * */
-static int km_RsaSet_pub_key(struct crypto_akcipher *tfm, const void *key,
+static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
                               unsigned int keylen)
 {
+    struct km_RsaCtx * ctx = NULL;
+
+    ctx = akcipher_tfm_ctx(tfm);
     (void) tfm;
     (void) key;
     (void) keylen;
@@ -1536,7 +1543,10 @@ static int km_RsaSet_pub_key(struct crypto_akcipher *tfm, const void *key,
  * */
 static unsigned int km_RsaMax_size(struct crypto_akcipher *tfm)
 {
-    (void) tfm;
+    struct km_RsaCtx * ctx = NULL;
+
+    ctx = akcipher_tfm_ctx(tfm);
+
     return 0;
 }
 
@@ -1547,13 +1557,36 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
 {
     /* Malloc and set the RNG here?*/
     /* wc_RsaSetRNG */
+    struct km_RsaCtx * ctx = NULL;
+
+    ctx = akcipher_tfm_ctx(tfm);
+
+    ctx->key = (RsaKey *)malloc(sizeof(RsaKey));
+
+    if (!ctx->key) {
+        pr_err("%s: allocation of %zu bytes for rsa key failed.\n",
+               WOLFKM_RSA_DRIVER, sizeof(RsaKey));
+        return MEMORY_E;
+    }
+
     (void) tfm;
     return 0;
 }
 
 static void km_RsaExit(struct crypto_akcipher *tfm)
 {
-    (void) tfm;
+    struct km_RsaCtx * ctx = NULL;
+
+    ctx = akcipher_tfm_ctx(tfm);
+
+    if (ctx->key) {
+        wc_FreeRsaKey(ctx->key);
+        free(ctx->key);
+        ctx->key = NULL;
+    }
+
+    wc_FreeRng(&ctx->rng);
+
     return;
 }
 
@@ -1563,11 +1596,11 @@ static struct akcipher_alg rsaAlg = {
     .base.cra_driver_name = WOLFKM_RSA_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
-    .base.cra_ctxsize     = sizeof(struct RsaKey),
+    .base.cra_ctxsize     = sizeof(struct km_RsaCtx),
     .encrypt              = km_RsaEnc,
     .decrypt              = km_RsaDec,
-    .set_priv_key         = km_RsaSet_priv_key,
-    .set_pub_key          = km_RsaSet_pub_key,
+    .set_priv_key         = km_RsaSetPrivKey,
+    .set_pub_key          = km_RsaSetPubKey,
     .max_size             = km_RsaMax_size,
     .init                 = km_RsaInit,
     .exit                 = km_RsaExit,
