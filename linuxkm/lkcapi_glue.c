@@ -1311,9 +1311,11 @@ static int linuxkm_test_rsa(void)
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
     WC_RNG                    rng;
-    byte *                    der = NULL;
     int                       bits = 2048;
-    word32                    der_len = 294;
+    byte *                    priv = NULL;
+    word32                    priv_len = 0;
+    byte *                    pub = NULL;
+    word32                    pub_len = 0;
     byte                      init_rng = 0;
     byte                      init_key = 0;
   //struct scatterlist        src, dst;
@@ -1326,14 +1328,6 @@ static int linuxkm_test_rsa(void)
 
     memset(&rng, 0, sizeof(rng));
     memset(key, 0, sizeof(RsaKey));
-
-    der = (byte*)malloc(der_len);
-    if (der == NULL) {
-        pr_err("error: allocating der(%d) failed\n", der_len);
-        goto test_rsa_end;
-    }
-
-    memset(der, 0, der_len);
 
     ret = wc_InitRsaKey(key, NULL);
     if (ret) {
@@ -1355,6 +1349,48 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    /* get rsa priv der */
+    priv_len = wc_RsaKeyToDer(key, NULL, 0);
+    if (priv_len <= 0) {
+        pr_err("error: rsa priv to der returned: %d\n", priv_len);
+        goto test_rsa_end;
+    }
+
+    priv = (byte*)malloc(priv_len);
+    if (priv == NULL) {
+        pr_err("error: allocating priv(%d) failed\n", priv_len);
+        goto test_rsa_end;
+    }
+
+    priv_len = wc_RsaKeyToDer(key, priv, priv_len);
+    if (priv_len <= 0) {
+        pr_err("error: rsa priv to der returned: %d\n", priv_len);
+        goto test_rsa_end;
+    }
+
+    memset(priv, 0, priv_len);
+
+    /* get rsa pub der */
+    pub_len = wc_RsaKeyToPublicDer(key, NULL, 0);
+    if (pub_len <= 0) {
+        pr_err("error: rsa pub to der returned: %d\n", pub_len);
+        goto test_rsa_end;
+    }
+
+    pub = (byte*)malloc(pub_len);
+    if (pub == NULL) {
+        pr_err("error: allocating pub(%d) failed\n", pub_len);
+        goto test_rsa_end;
+    }
+
+    pub_len = wc_RsaKeyToPublicDer(key, pub, pub_len);
+    if (pub_len <= 0) {
+        pr_err("error: rsa pub to der returned: %d\n", pub_len);
+        goto test_rsa_end;
+    }
+
+    memset(pub, 0, pub_len);
+
     tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
     if (IS_ERR(tfm)) {
         pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
@@ -1370,17 +1406,18 @@ static int linuxkm_test_rsa(void)
     }
 
 test_rsa_end:
-    if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
-    if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
-    if (key) { free(key); key = NULL; }
-    if (der) { free(der); der = NULL; }
     if (req) { akcipher_request_free(req); req = NULL; }
     if (tfm) { crypto_free_akcipher(tfm); tfm = NULL; }
 
+    if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
+    if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
+
+    if (key) { free(key); key = NULL; }
+    if (priv) { free(priv); priv = NULL; }
+    if (pub) { free(pub); pub = NULL; }
+
     return ret;
 }
-
-
 
 /**
  * RSA encrypt with public key.
