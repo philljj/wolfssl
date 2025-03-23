@@ -1307,6 +1307,9 @@ static int xtsAesAlg_loaded = 0;
 static int linuxkm_test_rsa(void)
 {
     int                       ret = 0;
+    byte *                    crypt = NULL;
+    int                       crypt_len = 0;
+    int                       crypt_ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
@@ -1318,6 +1321,15 @@ static int linuxkm_test_rsa(void)
     word32                    pub_len = 0;
     byte                      init_rng = 0;
     byte                      init_key = 0;
+    static const byte         p_vector[] =
+    /* Now is the time for all good men w/o trailing 0 */
+    {
+        0x4e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,
+        0x68,0x65,0x20,0x74,0x69,0x6d,0x65,0x20,
+        0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
+        0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
+    };
+
   //struct scatterlist        src, dst;
 
     key = (RsaKey*)malloc(sizeof(RsaKey));
@@ -1346,6 +1358,26 @@ static int linuxkm_test_rsa(void)
     ret = wc_MakeRsaKey(key, bits, WC_RSA_EXPONENT, &rng);
     if (ret) {
         pr_err("error: make rsa key returned: %d\n", ret);
+        goto test_rsa_end;
+    }
+
+    crypt_len = wc_RsaEncryptSize(key);
+    if (crypt_len <= 0) {
+        pr_err("error: rsa encrypt size returned: %d\n", crypt_len);
+        goto test_rsa_end;
+    }
+
+    crypt = (byte*)malloc(crypt_len);
+    if (crypt == NULL) {
+        pr_err("error: allocating crypt(%d) failed\n", crypt_len);
+        goto test_rsa_end;
+    }
+
+    crypt_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), crypt,
+                                    crypt_len, key, &rng);
+
+    if (crypt_ret != crypt_len) {
+        pr_err("error: rsa pub enc returned: %d\n", crypt_ret);
         goto test_rsa_end;
     }
 
@@ -1413,6 +1445,7 @@ test_rsa_end:
     if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
     if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
 
+    if (crypt) { free(crypt); crypt = NULL; }
     if (key) { free(key); key = NULL; }
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
