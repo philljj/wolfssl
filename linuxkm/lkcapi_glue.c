@@ -1310,6 +1310,7 @@ static int linuxkm_test_rsa(void)
     byte *                    crypt = NULL;
     int                       crypt_len = 0;
     int                       crypt_ret = 0;
+    int                       decrypt_ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
@@ -1329,6 +1330,11 @@ static int linuxkm_test_rsa(void)
         0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
+    byte                      decrypt[32];
+    int                       decrypt_len = 32;
+    int                       n_diff = 0;
+
+    memset(decrypt, 0, sizeof(decrypt));
 
   //struct scatterlist        src, dst;
 
@@ -1378,6 +1384,20 @@ static int linuxkm_test_rsa(void)
 
     if (crypt_ret != crypt_len) {
         pr_err("error: rsa pub enc returned: %d\n", crypt_ret);
+        goto test_rsa_end;
+    }
+
+    decrypt_ret = wc_RsaPrivateDecrypt(crypt, crypt_len, decrypt,
+                                      decrypt_len, key);
+
+    if (decrypt_ret != decrypt_len) {
+        pr_err("error: rsa priv dec returned: %d\n", decrypt_len);
+        goto test_rsa_end;
+    }
+
+    n_diff = memcmp(decrypt, p_vector, sizeof(p_vector));
+    if (n_diff) {
+        pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
 
