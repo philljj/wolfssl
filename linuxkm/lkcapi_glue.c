@@ -1388,10 +1388,10 @@ static int linuxkm_test_rsa(void)
     }
 
     decrypt_ret = wc_RsaPrivateDecrypt(crypt, crypt_len, decrypt,
-                                      decrypt_len, key);
+                                       decrypt_len, key);
 
     if (decrypt_ret != decrypt_len) {
-        pr_err("error: rsa priv dec returned: %d\n", decrypt_len);
+        pr_err("error: rsa priv dec returned: %d\n", decrypt_ret);
         goto test_rsa_end;
     }
 
