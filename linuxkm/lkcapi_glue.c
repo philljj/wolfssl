@@ -1347,6 +1347,13 @@ static int linuxkm_test_rsa(void)
     memset(&rng, 0, sizeof(rng));
     memset(key, 0, sizeof(RsaKey));
 
+    ret = wc_InitRng(&rng);
+    if (ret) {
+        pr_err("error: init rng returned: %d\n", ret);
+        goto test_rsa_end;
+    }
+    init_rng = 1;
+
     ret = wc_InitRsaKey(key, NULL);
     if (ret) {
         pr_err("error: init rsa key returned: %d\n", ret);
@@ -1354,12 +1361,12 @@ static int linuxkm_test_rsa(void)
     }
     init_key = 1;
 
-    ret = wc_InitRng(&rng);
+
+    ret = wc_RsaSetRNG(key, &rng);
     if (ret) {
-        pr_err("error: init rng returned: %d\n", ret);
+        pr_err("error: rsa set rng returned: %d\n", ret);
         goto test_rsa_end;
     }
-    init_rng = 1;
 
     ret = wc_MakeRsaKey(key, bits, WC_RSA_EXPONENT, &rng);
     if (ret) {
