@@ -1576,6 +1576,12 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
         return MEMORY_E;
     }
 
+    ret = wc_RsaSetRNG(ctx->key, &ctx->rng);
+    if (ret) {
+        pr_err("%s: rsa set rng returned: %d\n", WOLFKM_RSA_DRIVER, ret);
+        return MEMORY_E;
+    }
+
     return 0;
 }
 
