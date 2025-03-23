@@ -1405,6 +1405,7 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    pr_info("info: rsa self test good\n");
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
     if (tfm) { crypto_free_akcipher(tfm); tfm = NULL; }
@@ -1416,6 +1417,7 @@ test_rsa_end:
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
 
+    pr_info("info: rsa self test returned: %d\n", ret);
     return ret;
 }
 
