@@ -1558,6 +1558,7 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
     /* Malloc and set the RNG here?*/
     /* wc_RsaSetRNG */
     struct km_RsaCtx * ctx = NULL;
+    int                ret = 0;
 
     ctx = akcipher_tfm_ctx(tfm);
 
@@ -1569,7 +1570,12 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
         return MEMORY_E;
     }
 
-    (void) tfm;
+    ret = wc_InitRng(&ctx->rng);
+    if (ret) {
+        pr_err("%s: init rng returned: %d\n", WOLFKM_RSA_DRIVER, ret);
+        return MEMORY_E;
+    }
+
     return 0;
 }
 
