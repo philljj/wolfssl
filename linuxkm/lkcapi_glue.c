@@ -1309,7 +1309,7 @@ static int linuxkm_test_rsa(void)
     int                       ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
-    RsaKey                    key;
+    RsaKey *                  key = NULL;
     WC_RNG                    rng;
     byte *                    der = NULL;
     int                       bits = 2048;
@@ -1318,8 +1318,14 @@ static int linuxkm_test_rsa(void)
     byte                      init_key = 0;
   //struct scatterlist        src, dst;
 
+    key = (RsaKey*)malloc(sizeof(RsaKey));
+    if (key == NULL) {
+        pr_err("error: allocating key(%zu) failed\n", sizeof(RsaKey));
+        goto test_rsa_end;
+    }
+
     memset(&rng, 0, sizeof(rng));
-    memset(&key, 0, sizeof(key));
+    memset(key, 0, sizeof(RsaKey));
 
     der = (byte*)malloc(der_len);
     if (der == NULL) {
@@ -1329,7 +1335,7 @@ static int linuxkm_test_rsa(void)
 
     memset(der, 0, der_len);
 
-    ret = wc_InitRsaKey(&key, NULL);
+    ret = wc_InitRsaKey(key, NULL);
     if (ret) {
         pr_err("error: init rsa key returned: %d\n", ret);
         goto test_rsa_end;
@@ -1343,7 +1349,7 @@ static int linuxkm_test_rsa(void)
     }
     init_rng = 1;
 
-    ret = wc_MakeRsaKey(&key, bits, WC_RSA_EXPONENT, &rng);
+    ret = wc_MakeRsaKey(key, bits, WC_RSA_EXPONENT, &rng);
     if (ret) {
         pr_err("error: make rsa key returned: %d\n", ret);
         goto test_rsa_end;
@@ -1365,7 +1371,8 @@ static int linuxkm_test_rsa(void)
 
 test_rsa_end:
     if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
-    if (init_key) { wc_FreeRsaKey(&key); init_key = 0; }
+    if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
+    if (key) { free(key); key = NULL; }
     if (der) { free(der); der = NULL; }
     if (req) { akcipher_request_free(req); req = NULL; }
     if (tfm) { crypto_free_akcipher(tfm); tfm = NULL; }
