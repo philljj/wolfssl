@@ -1321,9 +1321,9 @@ static int linuxkm_test_rsa(void)
     RsaKey *                  key = NULL;
     WC_RNG                    rng;
     int                       bits = 2048;
-    byte *                    priv = NULL;
+    byte *                    priv = NULL; /* priv der */
     word32                    priv_len = 0;
-    byte *                    pub = NULL;
+    byte *                    pub = NULL; /* pub der */
     word32                    pub_len = 0;
     byte                      init_rng = 0;
     byte                      init_key = 0;
@@ -1468,6 +1468,12 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    ret = crypto_akcipher_set_pub_key(tfm, pub, pub_len);
+    if (ret) {
+        pr_err("error: crypto_akcipher_set_pub_key returned: %d\n", ret);
+        goto test_rsa_end;
+    }
+
     pr_info("info: rsa self test good\n");
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
@@ -1511,7 +1517,7 @@ static int km_RsaDec(struct akcipher_request *req)
  * param keylen  key length
  * */
 static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
-                              unsigned int keylen)
+                            unsigned int keylen)
 {
     (void) tfm;
     (void) key;
@@ -1527,15 +1533,25 @@ static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
  * param keylen  key length
  * */
 static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
-                              unsigned int keylen)
+                           unsigned int keylen)
 {
+    int                err = 0;
     struct km_RsaCtx * ctx = NULL;
+    word32             idx = 0;
 
     ctx = akcipher_tfm_ctx(tfm);
-    (void) tfm;
-    (void) key;
-    (void) keylen;
-    return 0;
+
+    err = wc_RsaPublicKeyDecode(key, &idx, ctx->key, keylen);
+
+    if (unlikely(err)) {
+        if (!disable_setkey_warnings) {
+            pr_err("%s: wc_RsaPublicKeyDecode failed: %d\n",
+                   WOLFKM_RSA_DRIVER, err);
+        }
+        return -EINVAL;
+    }
+
+    return err;
 }
 
 /**
@@ -1551,12 +1567,11 @@ static unsigned int km_RsaMax_size(struct crypto_akcipher *tfm)
 }
 
 /**
- *
+ * Init the rsa ctx. The RNG is needed for padding
+ * and blinding.
  * */
 static int km_RsaInit(struct crypto_akcipher *tfm)
 {
-    /* Malloc and set the RNG here?*/
-    /* wc_RsaSetRNG */
     struct km_RsaCtx * ctx = NULL;
     int                ret = 0;
 
