@@ -1474,6 +1474,12 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    ret = crypto_akcipher_set_priv_key(tfm, priv, priv_len);
+    if (ret) {
+        pr_err("error: crypto_akcipher_set_priv_key returned: %d\n", ret);
+        goto test_rsa_end;
+    }
+
     pr_info("info: rsa self test good\n");
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
@@ -1519,10 +1525,23 @@ static int km_RsaDec(struct akcipher_request *req)
 static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
                             unsigned int keylen)
 {
-    (void) tfm;
-    (void) key;
-    (void) keylen;
-    return 0;
+    int                err = 0;
+    struct km_RsaCtx * ctx = NULL;
+    word32             idx = 0;
+
+    ctx = akcipher_tfm_ctx(tfm);
+
+    err = wc_RsaPrivateKeyDecode(key, &idx, ctx->key, keylen);
+
+    if (unlikely(err)) {
+        if (!disable_setkey_warnings) {
+            pr_err("%s: wc_RsaPrivateKeyDecode failed: %d\n",
+                   WOLFKM_RSA_DRIVER, err);
+        }
+        return -EINVAL;
+    }
+
+    return err;
 }
 
 /**
