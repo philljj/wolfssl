@@ -1425,13 +1425,13 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    memset(priv, 0, priv_len);
+
     priv_len = wc_RsaKeyToDer(key, priv, priv_len);
     if (priv_len <= 0) {
         pr_err("error: rsa priv to der returned: %d\n", priv_len);
         goto test_rsa_end;
     }
-
-    memset(priv, 0, priv_len);
 
     /* get rsa pub der */
     pub_len = wc_RsaKeyToPublicDer(key, NULL, 0);
@@ -1446,13 +1446,13 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    memset(pub, 0, pub_len);
+
     pub_len = wc_RsaKeyToPublicDer(key, pub, pub_len);
     if (pub_len <= 0) {
         pr_err("error: rsa pub to der returned: %d\n", pub_len);
         goto test_rsa_end;
     }
-
-    memset(pub, 0, pub_len);
 
     tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
     if (IS_ERR(tfm)) {
