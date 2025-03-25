@@ -232,6 +232,12 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    ret = XMEMCMP(enc, enc2, sizeof(p_vector));
+    if (ret) {
+        pr_err("error: enc and enc2 do not match: %d\n", ret);
+        goto test_rsa_end;
+    }
+
     pr_info("info: rsa self test good\n");
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
