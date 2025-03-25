@@ -76,9 +76,6 @@ static int linuxkm_test_rsa(void)
     memset(dec, 0, sizeof(dec));
     memcpy(dec2, p_vector, sizeof(dec));
 
-    sg_init_one(&src, dec2, sizeof(p_vector));
-    sg_init_one(&dst, enc2, sizeof(p_vector));
-
     key = (RsaKey*)malloc(sizeof(RsaKey));
     if (key == NULL) {
         pr_err("error: allocating key(%zu) failed\n", sizeof(RsaKey));
@@ -222,6 +219,9 @@ static int linuxkm_test_rsa(void)
         pr_err("error: crypto_akcipher_set_priv_key returned: %d\n", ret);
         goto test_rsa_end;
     }
+
+    sg_init_one(&src, dec2, sizeof(p_vector));
+    sg_init_one(&dst, enc2, enc_len);
 
     akcipher_request_set_crypt(req, &src, &dst, sizeof(p_vector),
                                enc_len);
