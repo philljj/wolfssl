@@ -222,6 +222,13 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    ret = crypto_akcipher_encrypt(req);
+
+    if (ret) {
+        pr_err("error: crypto_akcipher_encrypt returned: %d\n", ret);
+        goto test_rsa_end;
+    }
+
     pr_info("info: rsa self test good\n");
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
