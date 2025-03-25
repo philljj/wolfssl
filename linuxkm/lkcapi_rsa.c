@@ -222,7 +222,8 @@ static int linuxkm_test_rsa(void)
      * Now allocate the akcipher transform, and set up
      * the akcipher request.
      * */
-    tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
+    tfm = crypto_alloc_akcipher(WOLFKM_RSA_DRIVER, 0, 0);
+    //tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
     if (IS_ERR(tfm)) {
         pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
                WOLFKM_RSA_DRIVER, PTR_ERR(tfm));
