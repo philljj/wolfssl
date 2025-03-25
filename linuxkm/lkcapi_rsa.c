@@ -269,7 +269,9 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: %s\n", dec);
+    #endif
 
     /* kernel module decrypt */
     enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
@@ -299,9 +301,11 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: %s\n", dec);
-
     pr_info("info: rsa self test good\n");
+    #endif
+
     ret = 0;
 
 test_rsa_end:
@@ -319,7 +323,10 @@ test_rsa_end:
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
 
+    #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: rsa self test returned: %d\n", ret);
+    #endif
+
     return ret;
 }
 
@@ -380,7 +387,9 @@ static int km_RsaEnc(struct akcipher_request *req)
     /* copy ctx->block_enc to req->dst */
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
+    #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: exiting km_RsaEnc\n");
+    #endif
     return 0;
 }
 
@@ -441,7 +450,9 @@ static int km_RsaDec(struct akcipher_request *req)
     /* copy ctx->block_enc to req->dst */
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
+    #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: exiting km_RsaDec\n");
+    #endif
     return 0;
 }
 
