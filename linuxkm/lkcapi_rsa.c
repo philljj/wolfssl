@@ -334,9 +334,9 @@ static int km_RsaEnc(struct akcipher_request *req)
 
     out_len = enc_len;
 
-    if (unlikely(req->src->length > sizeof(ctx->block_dec))) {
-        pr_err("error: %s: req->src->length too long: %d\n",
-               WOLFKM_RSA_DRIVER, req->src->length);
+    if (unlikely(req->src->length != (unsigned int) enc_len)) {
+        pr_err("error: %s: got %d, expected %d\n",
+               WOLFKM_RSA_DRIVER, req->src->length, enc_len);
         return -EINVAL;
     }
 
