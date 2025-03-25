@@ -127,13 +127,14 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    dec = (byte*)malloc(enc_len);
+    /* +1 for null term */
+    dec = (byte*)malloc(enc_len + 1);
     if (dec == NULL) {
         pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    dec2 = (byte*)malloc(enc_len);
+    dec2 = (byte*)malloc(enc_len + 1);
     if (dec2 == NULL) {
         pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
