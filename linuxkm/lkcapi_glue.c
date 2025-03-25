@@ -1502,7 +1502,12 @@ test_rsa_end:
  * */
 static int km_RsaEnc(struct akcipher_request *req)
 {
-    (void) req;
+    struct crypto_akcipher * tfm = NULL;
+    struct km_RsaCtx *       ctx = NULL;
+
+    tfm = crypto_akcipher_reqtfm(req);
+    ctx = akcipher_tfm_ctx(tfm);
+
     return 0;
 }
 
@@ -1511,7 +1516,12 @@ static int km_RsaEnc(struct akcipher_request *req)
  * */
 static int km_RsaDec(struct akcipher_request *req)
 {
-    (void) req;
+    struct crypto_akcipher * tfm = NULL;
+    struct km_RsaCtx *       ctx = NULL;
+
+    tfm = crypto_akcipher_reqtfm(req);
+    ctx = akcipher_tfm_ctx(tfm);
+
     return 0;
 }
 
