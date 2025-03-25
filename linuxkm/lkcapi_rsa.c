@@ -285,6 +285,12 @@ static int km_RsaEnc(struct akcipher_request *req)
     int                      err = 0;
     int                      enc_len = 0;
 
+    if (req->src == NULL || req->dst == NULL) {
+        pr_err("error: %s: rsa encrypt: null\n",
+               WOLFKM_RSA_DRIVER);
+        return -EINVAL;
+    }
+
     tfm = crypto_akcipher_reqtfm(req);
     ctx = akcipher_tfm_ctx(tfm);
 
@@ -301,13 +307,11 @@ static int km_RsaEnc(struct akcipher_request *req)
         return -EINVAL;
     }
 
-    #if 0
-    if (unlikely(req->src->length != (unsigned int) enc_len)) {
+    if (unlikely(req->dst->length != (unsigned int) enc_len)) {
         pr_err("error: %s: got %d, expected %d\n",
-               WOLFKM_RSA_DRIVER, req->src->length, enc_len);
+               WOLFKM_RSA_DRIVER, req->dst->length, enc_len);
         return -EINVAL;
     }
-    #endif
 
     /* copy req->src to ctx->block_dec */
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
