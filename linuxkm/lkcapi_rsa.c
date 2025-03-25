@@ -290,12 +290,13 @@ static int km_RsaEnc(struct akcipher_request *req)
     err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
                               enc_len, ctx->key, &ctx->rng);
 
-    if (unlikely(err)) {
+    if (unlikely(err < 0)) {
         pr_err("error: %s: rsa pub enc returned: %d\n", WOLFKM_RSA_DRIVER,
         err);
+        return err;
     }
 
-    return err;
+    return 0;
 }
 
 /**
