@@ -482,6 +482,9 @@ static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
         return -EINVAL;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
+    pr_info("info: exiting km_RsaSetPrivKey\n");
+    #endif
     return err;
 }
 
@@ -511,6 +514,9 @@ static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
         return -EINVAL;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
+    pr_info("info: exiting km_RsaSetPubKey\n");
+    #endif
     return err;
 }
 
@@ -531,6 +537,9 @@ static unsigned int km_RsaMaxSize(struct crypto_akcipher *tfm)
         return -EINVAL;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
+    pr_info("info: exiting km_RsaMaxSize\n");
+    #endif
     return (unsigned int) enc_len;
 }
 
@@ -571,6 +580,9 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
         return MEMORY_E;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA
+    pr_info("info: exiting km_RsaInit\n");
+    #endif
     return 0;
 }
 
@@ -588,6 +600,9 @@ static void km_RsaExit(struct crypto_akcipher *tfm)
 
     wc_FreeRng(&ctx->rng);
 
+    #ifdef WOLFKM_DEBUG_RSA
+    pr_info("info: exiting km_RsaExit\n");
+    #endif
     return;
 }
 
