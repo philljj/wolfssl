@@ -1296,7 +1296,7 @@ static int xtsAesAlg_loaded = 0;
         * (LINUXKM_LKCAPI_REGISTER_ALL || LINUXKM_LKCAPI_REGISTER_AESXTS)
         */
 
-#include "linuxkm/lkcapi_rsa.c"
+#include "linuxkm/lkcapi_rsa_glue.c"
 
 /* cipher tests, cribbed from test.c, with supplementary LKCAPI tests: */
 
