@@ -67,6 +67,7 @@ static int linuxkm_test_rsa(void)
     byte *                    dec = NULL;
     byte *                    dec2 = NULL;
     word32                    enc_len = 0;
+    word32                    out_len = 0;
     int                       enc_ret = 0;
     int                       dec_ret = 0;
     int                       n_diff = 0;
@@ -151,23 +152,23 @@ static int linuxkm_test_rsa(void)
     //enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
     //                              enc_len, key, &rng);
 
-    enc_ret = wc_RsaDirect(dec, enc_len, enc, &enc_len, key,
+    enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
                            RSA_PUBLIC_ENCRYPT, &rng);
 
-    if (enc_ret != (int) enc_len) {
-        pr_err("error: rsa pub enc returned: %d\n", enc_ret);
+    if (enc_ret != (int) enc_len || enc_len != out_len) {
+        pr_err("error: rsa pub enc returned: %d, %d\n", enc_ret, out_len);
         ret = -1;
         goto test_rsa_end;
     }
 
-    dec_ret = wc_RsaDirect(enc, enc_len, dec, &enc_len, key,
+    dec_ret = wc_RsaDirect(enc, enc_len, dec, &out_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
     //dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
     //                               dec_len, key);
 
-    if (dec_ret != (int) enc_len) {
-        pr_err("error: rsa priv dec returned: %d\n", dec_ret);
+    if (dec_ret != (int) enc_len || enc_len != out_len) {
+        pr_err("error: rsa priv dec returned: %d, %d\n", dec_ret, out_len);
         goto test_rsa_end;
     }
 
@@ -264,8 +265,8 @@ static int linuxkm_test_rsa(void)
     //dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
     //                               dec_len, key);
 
-    if (dec_ret != (int) enc_len) {
-        pr_err("error: rsa priv dec returned: %d\n", dec_ret);
+    if (dec_ret != (int) enc_len || enc_len != out_len) {
+        pr_err("error: rsa priv dec returned: %d, %d\n", dec_ret, out_len);
         goto test_rsa_end;
     }
 
@@ -313,6 +314,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     struct km_RsaCtx *       ctx = NULL;
     int                      err = 0;
     word32                   enc_len = 0;
+    word32                   out_len = 0;
 
     if (req->src == NULL || req->dst == NULL) {
         pr_err("error: %s: rsa encrypt: null\n",
@@ -347,14 +349,14 @@ static int km_RsaEnc(struct akcipher_request *req)
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
 
     err = wc_RsaDirect(ctx->block_dec, req->src->length, ctx->block_enc,
-                       &enc_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
+                       &out_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
 
     //err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
     //                          enc_len, ctx->key, &ctx->rng);
 
-    if (unlikely(err != (int) enc_len)) {
-        pr_err("error: %s: rsa pub enc returned: %d\n", WOLFKM_RSA_DRIVER,
-        err);
+    if (unlikely(err != (int) enc_len || enc_len != out_len)) {
+        pr_err("error: %s: rsa pub enc returned: %d, %d\n", WOLFKM_RSA_DRIVER,
+        err, out_len);
         return -EINVAL;
     }
 
