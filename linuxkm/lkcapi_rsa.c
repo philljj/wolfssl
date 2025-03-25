@@ -161,6 +161,7 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    memset(dec, 0, enc_len);
     dec_ret = wc_RsaDirect(enc, enc_len, dec, &out_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
