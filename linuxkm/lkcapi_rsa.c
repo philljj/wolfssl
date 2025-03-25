@@ -34,8 +34,10 @@
 #define WOLFKM_RSA_DRIVER    ("rsa" WOLFKM_DRIVER_SUFFIX)
 
 struct km_RsaCtx {
-    RsaKey * key;
     WC_RNG   rng; /* needed for padding */
+    RsaKey * key;
+    byte     block_enc[256];
+    byte     block_dec[256];
 };
 
 static int linuxkm_test_rsa(void)
@@ -334,9 +336,9 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
     int                ret = 0;
 
     ctx = akcipher_tfm_ctx(tfm);
+    memset(ctx, 0, sizeof(struct km_RsaCtx));
 
     ctx->key = (RsaKey *)malloc(sizeof(RsaKey));
-
     if (!ctx->key) {
         pr_err("%s: allocation of %zu bytes for rsa key failed.\n",
                WOLFKM_RSA_DRIVER, sizeof(RsaKey));
@@ -374,7 +376,6 @@ static void km_RsaExit(struct crypto_akcipher *tfm)
 
     return;
 }
-
 
 static struct akcipher_alg rsaAlg = {
     .base.cra_name        = WOLFKM_RSA_NAME,
