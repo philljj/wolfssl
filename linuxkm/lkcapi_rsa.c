@@ -152,6 +152,7 @@ static int linuxkm_test_rsa(void)
     //enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
     //                              enc_len, key, &rng);
 
+    out_len = enc_len;
     enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
                            RSA_PUBLIC_ENCRYPT, &rng);
 
