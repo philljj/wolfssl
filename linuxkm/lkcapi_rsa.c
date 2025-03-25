@@ -172,7 +172,7 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(dec, p_vector, sizeof(p_vector));
+    n_diff = memcmp(dec, dec2, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
