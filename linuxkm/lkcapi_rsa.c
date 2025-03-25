@@ -224,7 +224,7 @@ static int linuxkm_test_rsa(void)
     }
 
     akcipher_request_set_crypt(req, &src, &dst, sizeof(p_vector),
-                               sizeof(p_vector));
+                               enc_len);
 
     ret = crypto_akcipher_encrypt(req);
 
