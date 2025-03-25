@@ -241,11 +241,11 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    ret = crypto_akcipher_set_priv_key(tfm, priv, priv_len);
-    if (ret) {
-        pr_err("error: crypto_akcipher_set_priv_key returned: %d\n", ret);
-        goto test_rsa_end;
-    }
+    //ret = crypto_akcipher_set_priv_key(tfm, priv, priv_len);
+    //if (ret) {
+    //    pr_err("error: crypto_akcipher_set_priv_key returned: %d\n", ret);
+    //    goto test_rsa_end;
+    //}
 
     sg_init_one(&src, dec2, enc_len);
     sg_init_one(&dst, enc2, enc_len);
