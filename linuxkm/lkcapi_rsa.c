@@ -358,8 +358,8 @@ static int km_RsaEnc(struct akcipher_request *req)
     //                          enc_len, ctx->key, &ctx->rng);
 
     if (unlikely(err != (int) enc_len || enc_len != out_len)) {
-        pr_err("error: %s: rsa pub enc returned: %d, %d\n", WOLFKM_RSA_DRIVER,
-        err, out_len);
+        pr_err("error: %s: rsa pub enc returned: %d, %d, %d\n",
+               WOLFKM_RSA_DRIVER, err, out_len, enc_len);
         return -EINVAL;
     }
 
@@ -483,6 +483,12 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
     ret = wc_InitRng(&ctx->rng);
     if (ret) {
         pr_err("%s: init rng returned: %d\n", WOLFKM_RSA_DRIVER, ret);
+        return MEMORY_E;
+    }
+
+    ret = wc_InitRsaKey(ctx->key, NULL);
+    if (ret) {
+        pr_err("%s: init rsa key returned: %d\n", WOLFKM_RSA_DRIVER, ret);
         return MEMORY_E;
     }
 
