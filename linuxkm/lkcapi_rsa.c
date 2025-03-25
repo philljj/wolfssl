@@ -63,7 +63,6 @@ static int linuxkm_test_rsa(void)
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
     byte *                    enc = NULL;
-    byte *                    enc2 = NULL;
     byte *                    dec = NULL;
     byte *                    dec2 = NULL;
     word32                    enc_len = 0;
@@ -121,12 +120,6 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    enc2 = (byte*)malloc(enc_len);
-    if (enc2 == NULL) {
-        pr_err("error: allocating crypt(%d) failed\n", enc_len);
-        goto test_rsa_end;
-    }
-
     /* +1 for null term */
     dec = (byte*)malloc(enc_len + 1);
     if (dec == NULL) {
@@ -141,7 +134,6 @@ static int linuxkm_test_rsa(void)
     }
 
     memset(enc, 0, enc_len);
-    memset(enc2, 0, enc_len);
     memset(dec, 0, enc_len + 1);
     memset(dec2, 0, enc_len + 1);
 
@@ -239,7 +231,7 @@ static int linuxkm_test_rsa(void)
 
     /* kernel module encrypt */
     sg_init_one(&src, dec2, enc_len);
-    sg_init_one(&dst, enc2, enc_len);
+    sg_init_one(&dst, enc, enc_len);
 
     akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
 
@@ -250,7 +242,7 @@ static int linuxkm_test_rsa(void)
     }
 
     memset(dec2, 0, enc_len + 1);
-    dec_ret = wc_RsaDirect(enc2, enc_len, dec2, &enc_len, key,
+    dec_ret = wc_RsaDirect(enc, enc_len, dec2, &enc_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
     if (dec_ret != (int) enc_len || enc_len != out_len) {
@@ -298,6 +290,7 @@ static int linuxkm_test_rsa(void)
 
     pr_info("info: rsa self test good\n");
     ret = 0;
+
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
     if (tfm) { crypto_free_akcipher(tfm); tfm = NULL; }
@@ -306,7 +299,6 @@ test_rsa_end:
     if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
 
     if (enc) { free(enc); enc = NULL; }
-    if (enc2) { free(enc2); enc2 = NULL; }
     if (dec) { free(dec); dec = NULL; }
     if (dec2) { free(dec2); dec2 = NULL; }
     if (key) { free(key); key = NULL; }
