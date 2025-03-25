@@ -287,7 +287,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
 
-    err = wc_RsaPublicEncrypt(ctx->block_dec, enc_len, ctx->block_enc,
+    err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
                               enc_len, ctx->key, &ctx->rng);
 
     if (unlikely(err)) {
