@@ -42,7 +42,7 @@ struct km_RsaCtx {
 
 static int linuxkm_test_rsa(void)
 {
-    int                       ret = 0;
+    int                       ret = -1;
     byte *                    enc = NULL;
     byte *                    enc2 = NULL;
     int                       enc_len = 0;
@@ -133,15 +133,16 @@ static int linuxkm_test_rsa(void)
     }
 
     enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
-                                    enc_len, key, &rng);
+                                  enc_len, key, &rng);
 
     if (enc_ret != enc_len) {
         pr_err("error: rsa pub enc returned: %d\n", enc_ret);
+        ret = -1;
         goto test_rsa_end;
     }
 
     dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
-                                       dec_len, key);
+                                   dec_len, key);
 
     if (dec_ret != dec_len) {
         pr_err("error: rsa priv dec returned: %d\n", dec_ret);
@@ -256,6 +257,7 @@ static int linuxkm_test_rsa(void)
     #endif
 
     pr_info("info: rsa self test good\n");
+    ret = 0;
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
     if (tfm) { crypto_free_akcipher(tfm); tfm = NULL; }
@@ -307,6 +309,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     }
     #endif
 
+    /* copy req->src to ctx->block_dec */
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
 
@@ -318,6 +321,9 @@ static int km_RsaEnc(struct akcipher_request *req)
         err);
         return -EINVAL;
     }
+
+    /* copy ctx->block_enc to req->dst */
+    scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
     return 0;
 }
