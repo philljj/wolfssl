@@ -35,18 +35,19 @@
 
 struct km_RsaCtx {
     WC_RNG   rng; /* needed for padding */
-    RsaKey * key;
-    byte     block_enc[256];
+    byte     block_enc[256]; /* Large enough for RSA 2048. */
     byte     block_dec[256];
+    RsaKey * key;
 };
 
 static int linuxkm_test_rsa(void)
 {
     int                       ret = 0;
-    byte *                    crypt = NULL;
-    int                       crypt_len = 0;
-    int                       crypt_ret = 0;
-    int                       decrypt_ret = 0;
+    byte *                    enc = NULL;
+    byte *                    enc2 = NULL;
+    int                       enc_len = 0;
+    int                       enc_ret = 0;
+    int                       dec_ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
@@ -66,13 +67,17 @@ static int linuxkm_test_rsa(void)
         0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
-    byte                      decrypt[32];
-    int                       decrypt_len = 32;
+    byte                      dec[32];
+    byte                      dec2[32];
+    int                       dec_len = 32;
     int                       n_diff = 0;
+    struct scatterlist        src, dst;
 
-    memset(decrypt, 0, sizeof(decrypt));
+    memset(dec, 0, sizeof(dec));
+    memset(dec2, 0, sizeof(dec));
 
-  //struct scatterlist        src, dst;
+    sg_init_one(&src, dec2, sizeof(p_vector));
+    sg_init_one(&dst, enc2, sizeof(p_vector));
 
     key = (RsaKey*)malloc(sizeof(RsaKey));
     if (key == NULL) {
@@ -109,35 +114,41 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    crypt_len = wc_RsaEncryptSize(key);
-    if (crypt_len <= 0) {
-        pr_err("error: rsa encrypt size returned: %d\n", crypt_len);
+    enc_len = wc_RsaEncryptSize(key);
+    if (enc_len <= 0) {
+        pr_err("error: rsa encrypt size returned: %d\n", enc_len);
         goto test_rsa_end;
     }
 
-    crypt = (byte*)malloc(crypt_len);
-    if (crypt == NULL) {
-        pr_err("error: allocating crypt(%d) failed\n", crypt_len);
+    enc = (byte*)malloc(enc_len);
+    if (enc == NULL) {
+        pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    crypt_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), crypt,
-                                    crypt_len, key, &rng);
-
-    if (crypt_ret != crypt_len) {
-        pr_err("error: rsa pub enc returned: %d\n", crypt_ret);
+    enc2 = (byte*)malloc(enc_len);
+    if (enc2 == NULL) {
+        pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    decrypt_ret = wc_RsaPrivateDecrypt(crypt, crypt_len, decrypt,
-                                       decrypt_len, key);
+    enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
+                                    enc_len, key, &rng);
 
-    if (decrypt_ret != decrypt_len) {
-        pr_err("error: rsa priv dec returned: %d\n", decrypt_ret);
+    if (enc_ret != enc_len) {
+        pr_err("error: rsa pub enc returned: %d\n", enc_ret);
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(decrypt, p_vector, sizeof(p_vector));
+    dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
+                                       dec_len, key);
+
+    if (dec_ret != dec_len) {
+        pr_err("error: rsa priv dec returned: %d\n", dec_ret);
+        goto test_rsa_end;
+    }
+
+    n_diff = memcmp(dec, p_vector, sizeof(p_vector));
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
@@ -219,7 +230,8 @@ test_rsa_end:
     if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
     if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
 
-    if (crypt) { free(crypt); crypt = NULL; }
+    if (enc) { free(enc); enc = NULL; }
+    if (enc2) { free(enc2); enc2 = NULL; }
     if (key) { free(key); key = NULL; }
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
