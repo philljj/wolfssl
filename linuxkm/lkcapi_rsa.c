@@ -243,6 +243,15 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    {
+        unsigned int maxsize = crypto_akcipher_maxsize(tfm);
+        if (maxsize != enc_len) {
+            pr_err("error: crypto_akcipher_maxsize "
+                   "returned %d, expected %d\n", maxsize, enc_len);
+            goto test_rsa_end;
+        }
+    }
+
     /* kernel module encrypt */
     sg_init_one(&src, dec, enc_len);
     sg_init_one(&dst, enc, enc_len);
