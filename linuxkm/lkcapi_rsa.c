@@ -63,8 +63,8 @@ static int linuxkm_test_rsa(void)
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
     byte *                    enc = NULL;
-    byte *                    dec = NULL;
-    byte *                    dec2 = NULL;
+    byte *                    dec = NULL; /* wc decrypt */
+    byte *                    plaintext = NULL; /* km decrypt */
     word32                    enc_len = 0;
     word32                    out_len = 0;
     int                       enc_ret = 0;
@@ -114,38 +114,45 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    /**
+     * Allocate buffers based on the RsaKey enc_len.
+     *
+     * Add +1 for dec and plaintext arrays to printf nicely.
+     * */
     enc = (byte*)malloc(enc_len);
     if (enc == NULL) {
         pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    /* +1 for null term */
     dec = (byte*)malloc(enc_len + 1);
     if (dec == NULL) {
         pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    dec2 = (byte*)malloc(enc_len + 1);
-    if (dec2 == NULL) {
+    plaintext = (byte*)malloc(enc_len + 1);
+    if (plaintext == NULL) {
         pr_err("error: allocating crypt(%d) failed\n", enc_len);
         goto test_rsa_end;
     }
 
-    memset(enc, 0, enc_len);
-    memset(dec, 0, enc_len + 1);
-    memset(dec2, 0, enc_len + 1);
+    memset(enc,  0, enc_len);
+    memset(dec,  0, enc_len + 1);
+    memset(plaintext, 0, enc_len + 1);
 
+    /* Fill up dec and plaintext with plaintext reference. */
     for (i = 0; i < enc_len / sizeof(p_vector); ++i) {
         memcpy(dec  + i * sizeof(p_vector), p_vector, sizeof(p_vector));
-        memcpy(dec2 + i * sizeof(p_vector), p_vector, sizeof(p_vector));
+        memcpy(plaintext + i * sizeof(p_vector), p_vector, sizeof(p_vector));
     }
 
+    /**
+     * Sanity test: first encrypt and decrypt with direct wolfcrypt API.
+     * */
     out_len = enc_len;
     enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
                            RSA_PUBLIC_ENCRYPT, &rng);
-
     if (enc_ret != (int) enc_len || enc_len != out_len) {
         pr_err("error: rsa pub enc returned: %d, %d\n", enc_ret, out_len);
         ret = -1;
@@ -155,19 +162,21 @@ static int linuxkm_test_rsa(void)
     memset(dec, 0, enc_len);
     dec_ret = wc_RsaDirect(enc, enc_len, dec, &out_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
-
     if (dec_ret != (int) enc_len || enc_len != out_len) {
         pr_err("error: rsa priv dec returned: %d, %d\n", dec_ret, out_len);
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(dec, dec2, enc_len);
+    /* dec and plaintext should match now. */
+    n_diff = memcmp(dec, plaintext, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
 
-    /* get rsa priv der */
+    /**
+     * Now export Rsa Der to pub and priv.
+     * */
     priv_len = wc_RsaKeyToDer(key, NULL, 0);
     if (priv_len <= 0) {
         pr_err("error: rsa priv to der returned: %d\n", priv_len);
@@ -209,6 +218,10 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    /**
+     * Now allocate the akcipher transform, and set up
+     * the akcipher request.
+     * */
     tfm = crypto_alloc_akcipher(WOLFKM_RSA_NAME, 0, 0);
     if (IS_ERR(tfm)) {
         pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
@@ -230,7 +243,7 @@ static int linuxkm_test_rsa(void)
     }
 
     /* kernel module encrypt */
-    sg_init_one(&src, dec2, enc_len);
+    sg_init_one(&src, dec, enc_len);
     sg_init_one(&dst, enc, enc_len);
 
     akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
@@ -241,8 +254,8 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    memset(dec2, 0, enc_len + 1);
-    dec_ret = wc_RsaDirect(enc, enc_len, dec2, &enc_len, key,
+    memset(dec, 0, enc_len + 1);
+    dec_ret = wc_RsaDirect(enc, enc_len, dec, &enc_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
     if (dec_ret != (int) enc_len || enc_len != out_len) {
@@ -250,13 +263,13 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(dec2, dec, enc_len);
+    n_diff = memcmp(dec, plaintext, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
 
-    pr_info("info: %s\n", dec2);
+    pr_info("info: %s\n", dec);
 
     /* kernel module decrypt */
     enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
@@ -269,24 +282,24 @@ static int linuxkm_test_rsa(void)
     }
 
     sg_init_one(&src, enc, enc_len);
-    sg_init_one(&dst, dec2, enc_len);
+    sg_init_one(&dst, dec, enc_len);
 
     akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
 
-    memset(dec2, 0, enc_len);
+    memset(dec, 0, enc_len);
     ret = crypto_akcipher_decrypt(req);
     if (ret) {
         pr_err("error: crypto_akcipher_decrypt returned: %d\n", ret);
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(dec2, dec, enc_len);
+    n_diff = memcmp(dec, plaintext, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
 
-    pr_info("info: %s\n", dec2);
+    pr_info("info: %s\n", dec);
 
     pr_info("info: rsa self test good\n");
     ret = 0;
@@ -300,7 +313,8 @@ test_rsa_end:
 
     if (enc) { free(enc); enc = NULL; }
     if (dec) { free(dec); dec = NULL; }
-    if (dec2) { free(dec2); dec2 = NULL; }
+    if (plaintext) { free(plaintext); plaintext = NULL; }
+
     if (key) { free(key); key = NULL; }
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
@@ -366,6 +380,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     /* copy ctx->block_enc to req->dst */
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
+    pr_info("info: exiting km_RsaEnc\n");
     return 0;
 }
 
@@ -426,6 +441,7 @@ static int km_RsaDec(struct akcipher_request *req)
     /* copy ctx->block_enc to req->dst */
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
+    pr_info("info: exiting km_RsaDec\n");
     return 0;
 }
 
