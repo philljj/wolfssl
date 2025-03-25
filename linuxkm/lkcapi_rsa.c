@@ -351,7 +351,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
 
-    err = wc_RsaDirect(ctx->block_dec, req->src->length, ctx->block_enc,
+    err = wc_RsaDirect(ctx->block_dec, enc_len, ctx->block_enc,
                        &out_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
 
     //err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
@@ -444,13 +444,21 @@ static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
 /**
  * Returns dest buffer size required for key.
  * */
-static unsigned int km_RsaMax_size(struct crypto_akcipher *tfm)
+static unsigned int km_RsaMaxSize(struct crypto_akcipher *tfm)
 {
     struct km_RsaCtx * ctx = NULL;
+    word32             enc_len = 0;
 
     ctx = akcipher_tfm_ctx(tfm);
 
-    return 0;
+    enc_len = wc_RsaEncryptSize(ctx->key);
+    if (unlikely(enc_len <= 0)) {
+        pr_err("error: %s: rsa encrypt size returned: %d\n",
+               WOLFKM_RSA_DRIVER, enc_len);
+        return -EINVAL;
+    }
+
+    return (unsigned int) enc_len;
 }
 
 /**
@@ -514,7 +522,7 @@ static struct akcipher_alg rsaAlg = {
     .decrypt              = km_RsaDec,
     .set_priv_key         = km_RsaSetPrivKey,
     .set_pub_key          = km_RsaSetPubKey,
-    .max_size             = km_RsaMax_size,
+    .max_size             = km_RsaMaxSize,
     .init                 = km_RsaInit,
     .exit                 = km_RsaExit,
 };
