@@ -142,8 +142,8 @@ static int linuxkm_test_rsa(void)
 
     memset(enc, 0, enc_len);
     memset(enc2, 0, enc_len);
-    memset(dec, 0, enc_len);
-    memset(dec2, 0, enc_len);
+    memset(dec, 0, enc_len + 1);
+    memset(dec2, 0, enc_len + 1);
 
     for (i = 0; i < enc_len / sizeof(p_vector); ++i) {
         memcpy(dec  + i * sizeof(p_vector), p_vector, sizeof(p_vector));
@@ -249,7 +249,7 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    memset(dec2, 0, enc_len);
+    memset(dec2, 0, enc_len + 1);
     dec_ret = wc_RsaDirect(enc2, enc_len, dec2, &enc_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
@@ -293,6 +293,8 @@ static int linuxkm_test_rsa(void)
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
+
+    pr_info("info: %s\n", dec2);
 
     pr_info("info: rsa self test good\n");
     ret = 0;
