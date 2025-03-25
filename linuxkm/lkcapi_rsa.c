@@ -149,9 +149,6 @@ static int linuxkm_test_rsa(void)
         memcpy(dec2 + i * sizeof(p_vector), p_vector, sizeof(p_vector));
     }
 
-    //enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
-    //                              enc_len, key, &rng);
-
     out_len = enc_len;
     enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
                            RSA_PUBLIC_ENCRYPT, &rng);
@@ -165,9 +162,6 @@ static int linuxkm_test_rsa(void)
     memset(dec, 0, enc_len);
     dec_ret = wc_RsaDirect(enc, enc_len, dec, &out_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
-
-    //dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
-    //                               dec_len, key);
 
     if (dec_ret != (int) enc_len || enc_len != out_len) {
         pr_err("error: rsa priv dec returned: %d, %d\n", dec_ret, out_len);
@@ -242,12 +236,7 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    //ret = crypto_akcipher_set_priv_key(tfm, priv, priv_len);
-    //if (ret) {
-    //    pr_err("error: crypto_akcipher_set_priv_key returned: %d\n", ret);
-    //    goto test_rsa_end;
-    //}
-
+    /* kernel module encrypt */
     sg_init_one(&src, dec2, enc_len);
     sg_init_one(&dst, enc2, enc_len);
 
@@ -260,12 +249,8 @@ static int linuxkm_test_rsa(void)
     }
 
     memset(dec2, 0, enc_len);
-
     dec_ret = wc_RsaDirect(enc2, enc_len, dec2, &enc_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
-
-    //dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
-    //                               dec_len, key);
 
     if (dec_ret != (int) enc_len || enc_len != out_len) {
         pr_err("error: rsa priv dec returned: %d, %d\n", dec_ret, out_len);
@@ -280,13 +265,24 @@ static int linuxkm_test_rsa(void)
 
     pr_info("info: %s\n", dec2);
 
-    #if 0
-    ret = XMEMCMP(enc, enc2, sizeof(p_vector));
+    /* kernel module decrypt */
+    sg_init_one(&src, enc2, enc_len);
+    sg_init_one(&dst, dec2, enc_len);
+
+    akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
+
+    memset(dec2, 0, enc_len);
+    ret = crypto_akcipher_decrypt(req);
     if (ret) {
-        pr_err("error: enc and enc2 do not match: %d\n", ret);
+        pr_err("error: crypto_akcipher_encrypt returned: %d\n", ret);
         goto test_rsa_end;
     }
-    #endif
+
+    n_diff = memcmp(dec2, dec, enc_len);
+    if (n_diff) {
+        pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
+        goto test_rsa_end;
+    }
 
     pr_info("info: rsa self test good\n");
     ret = 0;
@@ -357,9 +353,6 @@ static int km_RsaEnc(struct akcipher_request *req)
     err = wc_RsaDirect(ctx->block_dec, enc_len, ctx->block_enc,
                        &out_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
 
-    //err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
-    //                          enc_len, ctx->key, &ctx->rng);
-
     if (unlikely(err != (int) enc_len || enc_len != out_len)) {
         pr_err("error: %s: rsa pub enc returned: %d, %d, %d\n",
                WOLFKM_RSA_DRIVER, err, out_len, enc_len);
@@ -379,9 +372,55 @@ static int km_RsaDec(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_RsaCtx *       ctx = NULL;
+    int                      err = 0;
+    word32                   enc_len = 0;
+    word32                   out_len = 0;
+
+    if (req->src == NULL || req->dst == NULL) {
+        pr_err("error: %s: rsa encrypt: null\n",
+               WOLFKM_RSA_DRIVER);
+        return -EINVAL;
+    }
 
     tfm = crypto_akcipher_reqtfm(req);
     ctx = akcipher_tfm_ctx(tfm);
+
+    enc_len = wc_RsaEncryptSize(ctx->key);
+    if (unlikely(enc_len <= 0)) {
+        pr_err("error: %s: rsa encrypt size returned: %d\n",
+               WOLFKM_RSA_DRIVER, enc_len);
+        return -EINVAL;
+    }
+
+    out_len = enc_len;
+
+    if (unlikely(req->src->length != (unsigned int) enc_len)) {
+        pr_err("error: %s: got %d, expected %d\n",
+               WOLFKM_RSA_DRIVER, req->src->length, enc_len);
+        return -EINVAL;
+    }
+
+    if (unlikely(req->dst->length != (unsigned int) enc_len)) {
+        pr_err("error: %s: got %d, expected %d\n",
+               WOLFKM_RSA_DRIVER, req->dst->length, enc_len);
+        return -EINVAL;
+    }
+
+    /* copy req->src to ctx->block_dec */
+    scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
+    memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
+
+    err = wc_RsaDirect(ctx->block_dec, enc_len, ctx->block_enc,
+                       &out_len, ctx->key, RSA_PUBLIC_DECRYPT, &ctx->rng);
+
+    if (unlikely(err != (int) enc_len || enc_len != out_len)) {
+        pr_err("error: %s: rsa pub enc returned: %d, %d, %d\n",
+               WOLFKM_RSA_DRIVER, err, out_len, enc_len);
+        return -EINVAL;
+    }
+
+    /* copy ctx->block_enc to req->dst */
+    scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, enc_len, 1);
 
     return 0;
 }
