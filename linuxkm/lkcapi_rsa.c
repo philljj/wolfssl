@@ -254,11 +254,43 @@ static int km_RsaEnc(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_RsaCtx *       ctx = NULL;
+    int                      err = 0;
+    int                      enc_len = 0;
 
     tfm = crypto_akcipher_reqtfm(req);
     ctx = akcipher_tfm_ctx(tfm);
 
-    return 0;
+    enc_len = wc_RsaEncryptSize(ctx->key);
+    if (unlikely(enc_len <= 0)) {
+        pr_err("error: %s: rsa encrypt size returned: %d\n",
+               WOLFKM_RSA_DRIVER, enc_len);
+        return -EINVAL;
+    }
+
+    if (unlikely(req->src->length > sizeof(ctx->block_dec))) {
+        pr_err("error: %s: req->src->length too long: %d\n",
+               WOLFKM_RSA_DRIVER, req->src->length);
+        return -EINVAL;
+    }
+
+    if (unlikely(req->src->length != (unsigned int) enc_len)) {
+        pr_err("error: %s: got %d, expected %d\n",
+               WOLFKM_RSA_DRIVER, req->src->length, enc_len);
+        return -EINVAL;
+    }
+
+    scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
+    memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
+
+    err = wc_RsaPublicEncrypt(ctx->block_dec, enc_len, ctx->block_enc,
+                              enc_len, ctx->key, &ctx->rng);
+
+    if (unlikely(err)) {
+        pr_err("error: %s: rsa pub enc returned: %d\n", WOLFKM_RSA_DRIVER,
+        err);
+    }
+
+    return err;
 }
 
 /**
