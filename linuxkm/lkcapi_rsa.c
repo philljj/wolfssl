@@ -300,11 +300,11 @@ static int linuxkm_test_rsa(void)
     akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
 
     memset(dec, 0, enc_len);
-    //ret = crypto_akcipher_decrypt(req);
-    //if (ret) {
-    //    pr_err("error: crypto_akcipher_decrypt returned: %d\n", ret);
-    //    goto test_rsa_end;
-    //}
+    ret = crypto_akcipher_decrypt(req);
+    if (ret) {
+        pr_err("error: crypto_akcipher_decrypt returned: %d\n", ret);
+        goto test_rsa_end;
+    }
 
     n_diff = memcmp(dec, plaintext, enc_len);
     if (n_diff) {
