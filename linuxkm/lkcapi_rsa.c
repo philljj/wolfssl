@@ -42,7 +42,8 @@ struct km_RsaCtx {
 
 static int linuxkm_test_rsa(void)
 {
-    int                       ret = -1;
+    int                       test_rc = -1;
+    int                       ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
@@ -316,7 +317,7 @@ static int linuxkm_test_rsa(void)
     pr_info("info: rsa self test good\n");
     #endif
 
-    ret = 0;
+    test_rc = 0;
 
 test_rsa_end:
     if (req) { akcipher_request_free(req); req = NULL; }
@@ -337,7 +338,7 @@ test_rsa_end:
     pr_info("info: rsa self test returned: %d\n", ret);
     #endif
 
-    return ret;
+    return test_rc;
 }
 
 /**
