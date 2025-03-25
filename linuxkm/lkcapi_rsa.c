@@ -266,7 +266,16 @@ static int linuxkm_test_rsa(void)
     pr_info("info: %s\n", dec2);
 
     /* kernel module decrypt */
-    sg_init_one(&src, enc2, enc_len);
+    enc_ret = wc_RsaDirect(dec, enc_len, enc, &out_len, key,
+                           RSA_PRIVATE_ENCRYPT, &rng);
+
+    if (enc_ret != (int) enc_len || enc_len != out_len) {
+        pr_err("error: rsa pub enc returned: %d, %d\n", enc_ret, out_len);
+        ret = -1;
+        goto test_rsa_end;
+    }
+
+    sg_init_one(&src, enc, enc_len);
     sg_init_one(&dst, dec2, enc_len);
 
     akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
@@ -274,7 +283,7 @@ static int linuxkm_test_rsa(void)
     memset(dec2, 0, enc_len);
     ret = crypto_akcipher_decrypt(req);
     if (ret) {
-        pr_err("error: crypto_akcipher_encrypt returned: %d\n", ret);
+        pr_err("error: crypto_akcipher_decrypt returned: %d\n", ret);
         goto test_rsa_end;
     }
 
