@@ -261,7 +261,7 @@ static int linuxkm_test_rsa(void)
 
     memset(dec2, 0, enc_len);
 
-    dec_ret = wc_RsaDirect(enc, enc_len, dec2, &enc_len, key,
+    dec_ret = wc_RsaDirect(enc2, enc_len, dec2, &enc_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
 
     //dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
@@ -277,6 +277,8 @@ static int linuxkm_test_rsa(void)
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
+
+    pr_info("info: %s\n", dec2);
 
     #if 0
     ret = XMEMCMP(enc, enc2, sizeof(p_vector));
