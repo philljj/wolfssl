@@ -74,7 +74,7 @@ static int linuxkm_test_rsa(void)
     struct scatterlist        src, dst;
 
     memset(dec, 0, sizeof(dec));
-    memset(dec2, 0, sizeof(dec));
+    memcpy(dec2, p_vector, sizeof(dec));
 
     sg_init_one(&src, dec2, sizeof(p_vector));
     sg_init_one(&dst, enc2, sizeof(p_vector));
@@ -232,11 +232,28 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
+    memset(dec2, 0, sizeof(dec2));
+    dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
+                                   dec_len, key);
+
+    if (dec_ret != dec_len) {
+        pr_err("error: rsa priv dec returned: %d\n", dec_ret);
+        goto test_rsa_end;
+    }
+
+    n_diff = memcmp(dec2, p_vector, sizeof(p_vector));
+    if (n_diff) {
+        pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
+        goto test_rsa_end;
+    }
+
+    #if 0
     ret = XMEMCMP(enc, enc2, sizeof(p_vector));
     if (ret) {
         pr_err("error: enc and enc2 do not match: %d\n", ret);
         goto test_rsa_end;
     }
+    #endif
 
     pr_info("info: rsa self test good\n");
 test_rsa_end:
