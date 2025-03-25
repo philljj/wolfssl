@@ -9337,7 +9337,7 @@ then
                     AM_CFLAGS="$AM_CFLAGS -DLINUXKM_LKCAPI_REGISTER_AESXTS" ;;
 
         'rsa') test "$ENABLED_RSA" != "no" || AC_MSG_ERROR([linuxkm-lkcapi-register ${lkcapi_alg}: RSA implementation not enabled.])
-                    AM_CFLAGS="$AM_CFLAGS -DLINUXKM_LKCAPI_REGISTER_RSA" ;;
+                    AM_CFLAGS="$AM_CFLAGS -DLINUXKM_LKCAPI_REGISTER_RSA -DWC_RSA_NO_PADDING" ;;
 
         *) AC_MSG_ERROR([Unsupported LKCAPI algorithm "$lkcapi_alg".])      ;;
         esac

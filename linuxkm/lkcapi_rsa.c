@@ -43,11 +43,6 @@ struct km_RsaCtx {
 static int linuxkm_test_rsa(void)
 {
     int                       ret = -1;
-    byte *                    enc = NULL;
-    byte *                    enc2 = NULL;
-    int                       enc_len = 0;
-    int                       enc_ret = 0;
-    int                       dec_ret = 0;
     struct crypto_akcipher *  tfm = NULL;
     struct akcipher_request * req = NULL;
     RsaKey *                  key = NULL;
@@ -67,14 +62,16 @@ static int linuxkm_test_rsa(void)
         0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
-    byte                      dec[32];
-    byte                      dec2[32];
-    int                       dec_len = 32;
+    byte *                    enc = NULL;
+    byte *                    enc2 = NULL;
+    byte *                    dec = NULL;
+    byte *                    dec2 = NULL;
+    word32                    enc_len = 0;
+    int                       enc_ret = 0;
+    int                       dec_ret = 0;
     int                       n_diff = 0;
     struct scatterlist        src, dst;
-
-    memset(dec, 0, sizeof(dec));
-    memcpy(dec2, p_vector, sizeof(dec));
+    size_t                    i = 0;
 
     key = (RsaKey*)malloc(sizeof(RsaKey));
     if (key == NULL) {
@@ -129,19 +126,47 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
-                                  enc_len, key, &rng);
+    dec = (byte*)malloc(enc_len);
+    if (dec == NULL) {
+        pr_err("error: allocating crypt(%d) failed\n", enc_len);
+        goto test_rsa_end;
+    }
 
-    if (enc_ret != enc_len) {
+    dec2 = (byte*)malloc(enc_len);
+    if (dec2 == NULL) {
+        pr_err("error: allocating crypt(%d) failed\n", enc_len);
+        goto test_rsa_end;
+    }
+
+    memset(enc, 0, enc_len);
+    memset(enc2, 0, enc_len);
+    memset(dec, 0, enc_len);
+    memset(dec2, 0, enc_len);
+
+    for (i = 0; i < enc_len / sizeof(p_vector); ++i) {
+        memcpy(dec  + i * sizeof(p_vector), p_vector, sizeof(p_vector));
+        memcpy(dec2 + i * sizeof(p_vector), p_vector, sizeof(p_vector));
+    }
+
+    //enc_ret = wc_RsaPublicEncrypt(p_vector, sizeof(p_vector), enc,
+    //                              enc_len, key, &rng);
+
+    enc_ret = wc_RsaDirect(dec, enc_len, enc, &enc_len, key,
+                           RSA_PUBLIC_ENCRYPT, &rng);
+
+    if (enc_ret != (int) enc_len) {
         pr_err("error: rsa pub enc returned: %d\n", enc_ret);
         ret = -1;
         goto test_rsa_end;
     }
 
-    dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
-                                   dec_len, key);
+    dec_ret = wc_RsaDirect(enc, enc_len, dec, &enc_len, key,
+                           RSA_PRIVATE_DECRYPT, &rng);
 
-    if (dec_ret != dec_len) {
+    //dec_ret = wc_RsaPrivateDecrypt(enc, enc_len, dec,
+    //                               dec_len, key);
+
+    if (dec_ret != (int) enc_len) {
         pr_err("error: rsa priv dec returned: %d\n", dec_ret);
         goto test_rsa_end;
     }
@@ -220,29 +245,31 @@ static int linuxkm_test_rsa(void)
         goto test_rsa_end;
     }
 
-    sg_init_one(&src, dec2, sizeof(p_vector));
+    sg_init_one(&src, dec2, enc_len);
     sg_init_one(&dst, enc2, enc_len);
 
-    akcipher_request_set_crypt(req, &src, &dst, sizeof(p_vector),
-                               enc_len);
+    akcipher_request_set_crypt(req, &src, &dst, enc_len, enc_len);
 
     ret = crypto_akcipher_encrypt(req);
-
     if (ret) {
         pr_err("error: crypto_akcipher_encrypt returned: %d\n", ret);
         goto test_rsa_end;
     }
 
-    memset(dec2, 0, sizeof(dec2));
-    dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
-                                   dec_len, key);
+    memset(dec2, 0, enc_len);
 
-    if (dec_ret != dec_len) {
+    dec_ret = wc_RsaDirect(enc, enc_len, dec2, &enc_len, key,
+                           RSA_PRIVATE_DECRYPT, &rng);
+
+    //dec_ret = wc_RsaPrivateDecrypt(enc2, enc_len, dec2,
+    //                               dec_len, key);
+
+    if (dec_ret != (int) enc_len) {
         pr_err("error: rsa priv dec returned: %d\n", dec_ret);
         goto test_rsa_end;
     }
 
-    n_diff = memcmp(dec2, p_vector, sizeof(p_vector));
+    n_diff = memcmp(dec2, dec, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
@@ -267,6 +294,8 @@ test_rsa_end:
 
     if (enc) { free(enc); enc = NULL; }
     if (enc2) { free(enc2); enc2 = NULL; }
+    if (dec) { free(dec); dec = NULL; }
+    if (dec2) { free(dec2); dec2 = NULL; }
     if (key) { free(key); key = NULL; }
     if (priv) { free(priv); priv = NULL; }
     if (pub) { free(pub); pub = NULL; }
@@ -283,7 +312,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     struct crypto_akcipher * tfm = NULL;
     struct km_RsaCtx *       ctx = NULL;
     int                      err = 0;
-    int                      enc_len = 0;
+    word32                   enc_len = 0;
 
     if (req->src == NULL || req->dst == NULL) {
         pr_err("error: %s: rsa encrypt: null\n",
@@ -317,10 +346,13 @@ static int km_RsaEnc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src->length, 0);
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
 
-    err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
-                              enc_len, ctx->key, &ctx->rng);
+    err = wc_RsaDirect(ctx->block_dec, req->src->length, ctx->block_enc,
+                       &enc_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
 
-    if (unlikely(err != enc_len)) {
+    //err = wc_RsaPublicEncrypt(ctx->block_dec, req->src->length, ctx->block_enc,
+    //                          enc_len, ctx->key, &ctx->rng);
+
+    if (unlikely(err != (int) enc_len)) {
         pr_err("error: %s: rsa pub enc returned: %d\n", WOLFKM_RSA_DRIVER,
         err);
         return -EINVAL;
