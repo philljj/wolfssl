@@ -41,7 +41,7 @@ struct km_RsaCtx {
 };
 
 #ifdef WOLFKM_DEBUG_RSA
-static void km_rsa_dump_hex(const char * what, const u8_t * data, u16_t len)
+static void km_rsa_dump_hex(const char * what, const byte * data, word32 len)
 {
     size_t i = 0;
   
