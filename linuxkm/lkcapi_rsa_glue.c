@@ -45,7 +45,7 @@ static void km_rsa_dump_hex(const char * what, const byte * data,
                             word32 data_len)
 {
     size_t i = 0;
-    char   hex_str[16 + 1];
+    char   hex_str[32 + 1];
     size_t len = data_len;
   
     if (what && *what) {
@@ -56,14 +56,10 @@ static void km_rsa_dump_hex(const char * what, const byte * data,
         memset(hex_str, 0, sizeof(hex_str));
 
         for (i = 0; i < 8 && len > 0; ++i, --len) {
-            sprintf(hex_str + (i * 2), "%02x", data[data_len - len]);
+            sprintf(hex_str + (i * 2) + 1, " %02x", data[data_len - len]);
         }
 
         pr_info("%s\n", hex_str);
-
-        if ((i + 1) % 8 == 0) {
-            pr_info("\n");
-        }
     }
   
     pr_info("\n");
