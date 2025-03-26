@@ -55,7 +55,7 @@ static void km_rsa_dump_hex(const char * what, const byte * data,
     while (len) {
         memset(hex_str, 0, sizeof(hex_str));
 
-        for (i = 0; i < 8, len > 0; ++i, --len) {
+        for (i = 0; i < 8 && len > 0; ++i, --len) {
             sprintf(hex_str + (i * 2), "%02x", data[data_len - len]);
         }
 
