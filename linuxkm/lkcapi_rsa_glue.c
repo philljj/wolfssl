@@ -40,6 +40,30 @@ struct km_RsaCtx {
     RsaKey * key;
 };
 
+#ifdef WOLFKM_DEBUG_RSA
+static void km_rsa_dump_hex(const char * what, const u8_t * data, u16_t len)
+{
+    size_t i = 0;
+  
+    if (what && *what) {
+        printf("%s: 0x", what);
+    }
+  
+    if (data && len) {
+        for (i = 0; i < len; ++i) {
+            if ((i + 1) % 8 == 0) {
+                printf("\n");
+            }
+            printf("%02x", data[i]);
+        }
+    }
+  
+    printf("\n");
+
+    return;
+}
+#endif /* WOLFKM_DEBUG_RSA */
+
 static int linuxkm_test_rsa(void)
 {
     int                       test_rc = -1;
@@ -218,6 +242,10 @@ static int linuxkm_test_rsa(void)
         pr_err("error: rsa pub to der returned: %d\n", pub_len);
         goto test_rsa_end;
     }
+
+    #ifdef WOLFKM_DEBUG_RSA
+    km_rsa_dump_hex("pub", pub, pub_len);
+    #endif /* WOLFKM_DEBUG_RSA */
 
     /**
      * Now allocate the akcipher transform, and set up
