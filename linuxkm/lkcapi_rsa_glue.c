@@ -46,19 +46,19 @@ static void km_rsa_dump_hex(const char * what, const byte * data, word32 len)
     size_t i = 0;
   
     if (what && *what) {
-        printf("%s: 0x", what);
+        pr_info("%s: 0x", what);
     }
   
     if (data && len) {
         for (i = 0; i < len; ++i) {
             if ((i + 1) % 8 == 0) {
-                printf("\n");
+                pr_info("\n");
             }
-            printf("%02x", data[i]);
+            pr_info("%02x", data[i]);
         }
     }
   
-    printf("\n");
+    pr_info("\n");
 
     return;
 }
