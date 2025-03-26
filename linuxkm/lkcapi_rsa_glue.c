@@ -49,7 +49,7 @@ static void km_rsa_dump_hex(const char * what, const byte * data,
     size_t len = data_len;
   
     if (what && *what) {
-        pr_info("%s: 0x", what);
+        pr_info("%s: %d", what, data_len);
     }
   
     while (len) {
