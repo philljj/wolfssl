@@ -621,7 +621,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
         goto test_pkcs1_end;
     }
 
-    /* dec and p_vector should match now. */
+    /* dec and enc should match now. */
     n_diff = memcmp(dec, enc, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
@@ -711,6 +711,13 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     n_diff = memcmp(km_sig, sig, sig_len);
     if (n_diff) {
         pr_err("error: km-sig doesn't match sig: %d\n", n_diff);
+        goto test_pkcs1_end;
+    }
+
+    /* dec and enc should match now. */
+    n_diff = memcmp(dec, enc, enc_len);
+    if (n_diff) {
+        pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_pkcs1_end;
     }
 
