@@ -595,8 +595,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
         goto test_pkcs1_end;
     }
 
-    sig_len = wc_RsaSSL_Sign(enc, enc_len, sig, encrypt_len,
-                             key, &rng);
+    sig_len = wc_RsaSSL_Sign(enc, enc_len, sig, encrypt_len, key, &rng);
     if (sig_len <= 0) {
         pr_err("error: wc_RsaSSL_Sign returned: %d\n", sig_len);
         goto test_pkcs1_end;
@@ -607,7 +606,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     memset(dec, 0, encrypt_len + 1);
-    ret = wc_RsaSSL_Verify(sig, encrypt_len, dec, sizeof(p_vector), key);
+    ret = wc_RsaSSL_Verify(sig, encrypt_len, dec, enc_len, key);
     if (ret <= 0 || ret != sizeof(p_vector)) {
         pr_err("error: wc_RsaSSL_Verify returned %d, expected %zu\n" , ret,
                sizeof(p_vector));
@@ -615,7 +614,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     }
 
     /* dec and p_vector should match now. */
-    n_diff = memcmp(dec, p_vector, sizeof(p_vector));
+    n_diff = memcmp(dec, enc, enc_len);
     if (n_diff) {
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_pkcs1_end;
