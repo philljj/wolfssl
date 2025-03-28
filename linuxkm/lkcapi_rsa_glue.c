@@ -607,9 +607,9 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
 
     memset(dec, 0, encrypt_len + 1);
     ret = wc_RsaSSL_Verify(sig, encrypt_len, dec, enc_len, key);
-    if (ret <= 0 || ret != sizeof(p_vector)) {
+    if (ret <= 0 || ret != enc_len) {
         pr_err("error: wc_RsaSSL_Verify returned %d, expected %zu\n" , ret,
-               sizeof(p_vector));
+               enc_len);
         goto test_pkcs1_end;
     }
 
