@@ -28,6 +28,7 @@
     (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
      defined(LINUXKM_LKCAPI_REGISTER_RSA))
 
+#include <wolfssl/wolfcrypt/asn.h>
 #include <wolfssl/wolfcrypt/rsa.h>
 
 #define WOLFKM_RSA_NAME      "rsa"
@@ -469,8 +470,10 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     };
     byte *                    sig = NULL;
     byte *                    dec = NULL;
+    byte *                    enc = NULL;
     word32                    encrypt_len = 0;
     word32                    sig_len = 0;
+    word32                    enc_len = 0;
     //word32                    out_len = 0;
     struct scatterlist        src, dst;
     struct scatterlist        src_tab[2];
@@ -523,6 +526,13 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
         goto test_pkcs1_end;
     }
     memset(sig, 0, encrypt_len);
+
+    enc = (byte*)malloc(encrypt_len);
+    if (enc == NULL) {
+        pr_err("error: allocating enc(%d) failed\n", encrypt_len);
+        goto test_pkcs1_end;
+    }
+    memset(enc, 0, encrypt_len);
 
     dec = (byte*)malloc(encrypt_len + 1);
     if (dec == NULL) {
@@ -578,7 +588,14 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     /**
      * Sanity test: first sign and verify with direct wolfcrypt API.
      * */
-    sig_len = wc_RsaSSL_Sign(p_vector, sizeof(p_vector), sig, encrypt_len,
+
+    enc_len = wc_EncodeSignature(enc, p_vector, sizeof(p_vector), SHA256h);
+    if (enc_len <= 0) {
+        pr_err("error: wc_EncodeSignature returned: %d\n", enc_len);
+        goto test_pkcs1_end;
+    }
+
+    sig_len = wc_RsaSSL_Sign(enc, enc_len, sig, encrypt_len,
                              key, &rng);
     if (sig_len <= 0) {
         pr_err("error: wc_RsaSSL_Sign returned: %d\n", sig_len);
