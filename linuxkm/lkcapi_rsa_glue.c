@@ -469,6 +469,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
     byte *                    sig = NULL;
+    byte *                    km_sig = NULL;
     byte *                    dec = NULL;
     byte *                    enc = NULL;
     word32                    encrypt_len = 0;
@@ -526,6 +527,13 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
         goto test_pkcs1_end;
     }
     memset(sig, 0, encrypt_len);
+
+    km_sig = (byte*)malloc(encrypt_len);
+    if (km_sig == NULL) {
+        pr_err("error: allocating km_sig(%d) failed\n", encrypt_len);
+        goto test_pkcs1_end;
+    }
+    memset(km_sig, 0, encrypt_len);
 
     enc = (byte*)malloc(encrypt_len);
     if (enc == NULL) {
@@ -658,8 +666,8 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     }
 
     sg_init_one(&src, p_vector, sizeof(p_vector));
-    sg_init_one(&dst, sig, encrypt_len);
-    memset(sig, 0, encrypt_len);
+    sg_init_one(&dst, km_sig, encrypt_len);
+    memset(km_sig, 0, encrypt_len);
 
     akcipher_request_set_crypt(req, &src, &dst, sizeof(p_vector), encrypt_len);
 
@@ -670,7 +678,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     }
 
     #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    km_rsa_dump_hex("sig", sig, encrypt_len);
+    km_rsa_dump_hex("km_sig", km_sig, encrypt_len);
     #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     /**
@@ -680,9 +688,9 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
      *   src_tab[1]: message (digest)
      *
      * src_len is sig size, dst_len is digest size. */
-    sg_init_one(&src, sig, encrypt_len);
+    sg_init_one(&src, km_sig, encrypt_len);
     sg_init_table(src_tab, 2);
-    sg_set_buf(&src_tab[0], sig, encrypt_len);
+    sg_set_buf(&src_tab[0], km_sig, encrypt_len);
     sg_set_buf(&src_tab[1], p_vector, sizeof(p_vector));
 
     akcipher_request_set_crypt(req, src_tab, NULL, encrypt_len, sizeof(p_vector));
@@ -694,9 +702,15 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits)
     }
 
     memset(dec, 0, encrypt_len + 1);
-    ret = wc_RsaSSL_Verify(sig, encrypt_len, dec, encrypt_len, key);
+    ret = wc_RsaSSL_Verify(km_sig, encrypt_len, dec, encrypt_len, key);
     if (ret <= 0) {
         pr_err("error: wc_RsaSSL_Verify returned: %d\n", ret);
+        goto test_pkcs1_end;
+    }
+
+    n_diff = memcmp(km_sig, sig, sig_len);
+    if (n_diff) {
+        pr_err("error: km-sig doesn't match sig: %d\n", n_diff);
         goto test_pkcs1_end;
     }
 
