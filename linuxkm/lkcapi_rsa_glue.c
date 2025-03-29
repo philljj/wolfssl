@@ -49,15 +49,15 @@ struct km_RsaCtx {
  * generic rsa callbacks. 
  * */
 
-static int          km_RsaInitCommon(struct crypto_akcipher *tfm,
+static int          km_rsa_init_common(struct crypto_akcipher *tfm,
                                      int hash_oid);
-static int          km_RsaInit(struct crypto_akcipher *tfm);
-static void         km_RsaExit(struct crypto_akcipher *tfm);
-static int          km_RsaEnc(struct akcipher_request *req);
-static int          km_RsaDec(struct akcipher_request *req);
-static int          km_RsaSetPrivKey(struct crypto_akcipher *tfm,
+static int          km_rsa_init(struct crypto_akcipher *tfm);
+static void         km_rsa_exit(struct crypto_akcipher *tfm);
+static int          km_rsa_enc(struct akcipher_request *req);
+static int          km_rsa_dec(struct akcipher_request *req);
+static int          km_rsa_set_priv(struct crypto_akcipher *tfm,
                                      const void *key, unsigned int keylen);
-static int          km_RsaSetPubKey(struct crypto_akcipher *tfm,
+static int          km_rsa_set_pub(struct crypto_akcipher *tfm,
                                     const void *key, unsigned int keylen);
 static unsigned int km_RsaMaxSize(struct crypto_akcipher *tfm);
 
@@ -78,13 +78,13 @@ static struct akcipher_alg rsaAlg = {
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_RsaCtx),
-    .encrypt              = km_RsaEnc,
-    .decrypt              = km_RsaDec,
-    .set_priv_key         = km_RsaSetPrivKey,
-    .set_pub_key          = km_RsaSetPubKey,
+    .encrypt              = km_rsa_enc,
+    .decrypt              = km_rsa_dec,
+    .set_priv_key         = km_rsa_set_priv,
+    .set_pub_key          = km_rsa_set_pub,
     .max_size             = km_RsaMaxSize,
-    .init                 = km_RsaInit,
-    .exit                 = km_RsaExit,
+    .init                 = km_rsa_init,
+    .exit                 = km_rsa_exit,
 };
 
 static struct akcipher_alg pkcs1_sha256 = {
@@ -97,11 +97,11 @@ static struct akcipher_alg pkcs1_sha256 = {
     .verify               = km_pkcs1_verify,
     .encrypt              = km_pkcs1_enc,
     .decrypt              = km_pkcs1_dec,
-    .set_priv_key         = km_RsaSetPrivKey,
-    .set_pub_key          = km_RsaSetPubKey,
+    .set_priv_key         = km_rsa_set_priv,
+    .set_pub_key          = km_rsa_set_pub,
     .max_size             = km_RsaMaxSize,
     .init                 = km_pkcs1_sha256_init,
-    .exit                 = km_RsaExit,
+    .exit                 = km_rsa_exit,
 };
 
 static int  linuxkm_test_rsa_driver(const char * driver, int nbits);
@@ -784,7 +784,7 @@ test_pkcs1_end:
     return test_rc;
 }
 
-static int km_RsaInitCommon(struct crypto_akcipher *tfm, int hash_oid)
+static int km_rsa_init_common(struct crypto_akcipher *tfm, int hash_oid)
 {
     struct km_RsaCtx * ctx = NULL;
     int                ret = 0;
@@ -820,7 +820,7 @@ static int km_RsaInitCommon(struct crypto_akcipher *tfm, int hash_oid)
     ctx->hash_oid = hash_oid;
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaInit\n");
+    pr_info("info: exiting km_rsa_init\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -834,7 +834,7 @@ static int km_RsaInitCommon(struct crypto_akcipher *tfm, int hash_oid)
  * returns 0   on success
  * returns < 0 on error 
  * */
-static int km_RsaEnc(struct akcipher_request *req)
+static int km_rsa_enc(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_RsaCtx *       ctx = NULL;
@@ -889,7 +889,7 @@ static int km_RsaEnc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaEnc\n");
+    pr_info("info: exiting km_rsa_enc\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -902,7 +902,7 @@ static int km_RsaEnc(struct akcipher_request *req)
  * returns 0   on success
  * returns < 0 on error 
  * */
-static int km_RsaDec(struct akcipher_request *req)
+static int km_rsa_dec(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_RsaCtx *       ctx = NULL;
@@ -957,7 +957,7 @@ static int km_RsaDec(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaDec\n");
+    pr_info("info: exiting km_rsa_dec\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -969,7 +969,7 @@ static int km_RsaDec(struct akcipher_request *req)
  * param key     BER encoded private key and parameters
  * param keylen  key length
  * */
-static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
+static int km_rsa_set_priv(struct crypto_akcipher *tfm, const void *key,
                             unsigned int keylen)
 {
     int                err = 0;
@@ -989,7 +989,7 @@ static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
     }
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaSetPrivKey\n");
+    pr_info("info: exiting km_rsa_set_priv\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return err;
 }
@@ -1001,7 +1001,7 @@ static int km_RsaSetPrivKey(struct crypto_akcipher *tfm, const void *key,
  * param key     BER encoded pub key and parameters
  * param keylen  key length
  * */
-static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
+static int km_rsa_set_pub(struct crypto_akcipher *tfm, const void *key,
                            unsigned int keylen)
 {
     int                err = 0;
@@ -1021,7 +1021,7 @@ static int km_RsaSetPubKey(struct crypto_akcipher *tfm, const void *key,
     }
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaSetPubKey\n");
+    pr_info("info: exiting km_rsa_set_pub\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return err;
 }
@@ -1054,7 +1054,7 @@ static unsigned int km_RsaMaxSize(struct crypto_akcipher *tfm)
  * Init the rsa ctx. The RNG is needed for padding
  * and blinding.
  * */
-static int km_RsaInit(struct crypto_akcipher *tfm)
+static int km_rsa_init(struct crypto_akcipher *tfm)
 {
     struct km_RsaCtx * ctx = NULL;
     int                ret = 0;
@@ -1088,12 +1088,12 @@ static int km_RsaInit(struct crypto_akcipher *tfm)
     }
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaInit\n");
+    pr_info("info: exiting km_rsa_init\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
 
-static void km_RsaExit(struct crypto_akcipher *tfm)
+static void km_rsa_exit(struct crypto_akcipher *tfm)
 {
     struct km_RsaCtx * ctx = NULL;
 
@@ -1108,7 +1108,7 @@ static void km_RsaExit(struct crypto_akcipher *tfm)
     wc_FreeRng(&ctx->rng);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaExit\n");
+    pr_info("info: exiting km_rsa_exit\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return;
 }
@@ -1119,7 +1119,7 @@ static void km_RsaExit(struct crypto_akcipher *tfm)
  * */
 static int km_pkcs1_sha256_init(struct crypto_akcipher *tfm)
 {
-    return km_RsaInitCommon(tfm, SHA256h);
+    return km_rsa_init_common(tfm, SHA256h);
 }
 
 
@@ -1166,7 +1166,7 @@ static int km_pkcs1_enc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaDec\n");
+    pr_info("info: exiting km_rsa_dec\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -1214,7 +1214,7 @@ static int km_pkcs1_dec(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_RsaDec\n");
+    pr_info("info: exiting km_rsa_dec\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
