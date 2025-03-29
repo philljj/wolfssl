@@ -3223,6 +3223,7 @@ static int linuxkm_lkcapi_register(void)
      defined(LINUXKM_LKCAPI_REGISTER_RSA))
 
     REGISTER_ALG(rsaAlg, crypto_register_akcipher, linuxkm_test_rsa);
+    REGISTER_ALG(pkcs1_sha256, crypto_register_akcipher, linuxkm_test_pkcs1);
 #endif
 
 #undef REGISTER_ALG
@@ -3280,6 +3281,7 @@ static void linuxkm_lkcapi_unregister(void)
      defined(LINUXKM_LKCAPI_REGISTER_RSA))
 
     UNREGISTER_ALG(rsaAlg, crypto_unregister_akcipher);
+    UNREGISTER_ALG(pkcs1_sha256, crypto_unregister_akcipher);
 #endif
 
 #undef UNREGISTER_ALG
