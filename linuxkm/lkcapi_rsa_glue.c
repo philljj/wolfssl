@@ -531,7 +531,12 @@ static int km_pkcs1_sign(struct akcipher_request *req)
     ctx = akcipher_tfm_ctx(tfm);
     key_len = ctx->key_len;
 
-    /* todo: overflow check */
+    if (key_len <= 0) {
+        pr_err("error: %s: key_len invalid: %d\n",
+               WOLFKM_RSA_DRIVER, key_len);
+        return -EINVAL;
+    }
+
     if (req->src_len + ctx->digest_len + RSA_MIN_PAD_SZ > key_len) {
         pr_err("error: %s: rsa src_len too large: %d\n",
                WOLFKM_RSA_DRIVER, req->src_len);
@@ -690,7 +695,6 @@ static int km_pkcs1_enc(struct akcipher_request *req)
     ctx = akcipher_tfm_ctx(tfm);
     key_len = ctx->key_len;
 
-    /* todo: src_len overflow check */
     if (key_len <= 0) {
         pr_err("error: %s: key_len invalid: %d\n",
                WOLFKM_RSA_DRIVER, key_len);
@@ -748,7 +752,6 @@ static int km_pkcs1_dec(struct akcipher_request *req)
     ctx = akcipher_tfm_ctx(tfm);
     key_len = ctx->key_len;
 
-    /* todo: src_len overflow check */
     if (key_len <= 0) {
         pr_err("error: %s: key_len invalid: %d\n",
                WOLFKM_RSA_DRIVER, key_len);
