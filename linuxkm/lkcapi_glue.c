@@ -1296,6 +1296,8 @@ static int xtsAesAlg_loaded = 0;
         * (LINUXKM_LKCAPI_REGISTER_ALL || LINUXKM_LKCAPI_REGISTER_AESXTS)
         */
 
+#include "linuxkm/lkcapi_rsa_glue.c"
+
 /* cipher tests, cribbed from test.c, with supplementary LKCAPI tests: */
 
 #if defined(HAVE_AES_CBC) && \
@@ -3216,6 +3218,17 @@ static int linuxkm_lkcapi_register(void)
     REGISTER_ALG(xtsAesAlg, crypto_register_skcipher, linuxkm_test_aesxts);
 #endif
 
+#if !defined(NO_RSA) && \
+    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+     defined(LINUXKM_LKCAPI_REGISTER_RSA))
+
+    REGISTER_ALG(rsaAlg, crypto_register_akcipher, linuxkm_test_rsa);
+    REGISTER_ALG(pkcs1_sha256, crypto_register_akcipher,
+                 linuxkm_test_pkcs1_sha256);
+    REGISTER_ALG(pkcs1_sha512, crypto_register_akcipher,
+                 linuxkm_test_pkcs1_sha512);
+#endif
+
 #undef REGISTER_ALG
 
     out:
@@ -3264,6 +3277,15 @@ static void linuxkm_lkcapi_unregister(void)
      defined(LINUXKM_LKCAPI_REGISTER_AESXTS))
 
     UNREGISTER_ALG(xtsAesAlg, crypto_unregister_skcipher);
+#endif
+
+#if !defined(NO_RSA) && \
+    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+     defined(LINUXKM_LKCAPI_REGISTER_RSA))
+
+    UNREGISTER_ALG(rsaAlg, crypto_unregister_akcipher);
+    UNREGISTER_ALG(pkcs1_sha256, crypto_unregister_akcipher);
+    UNREGISTER_ALG(pkcs1_sha512, crypto_unregister_akcipher);
 #endif
 
 #undef UNREGISTER_ALG
