@@ -3223,7 +3223,7 @@ static int linuxkm_lkcapi_register(void)
      defined(LINUXKM_LKCAPI_REGISTER_RSA))
 
     #if defined(LINUXKM_DIRECT_RSA)
-    REGISTER_ALG(rsaAlg, crypto_register_akcipher, linuxkm_test_rsa);
+    REGISTER_ALG(direct_rsa, crypto_register_akcipher, linuxkm_test_rsa);
     #endif /* LINUXKM_DIRECT_RSA */
     REGISTER_ALG(pkcs1_sha256, crypto_register_akcipher,
                  linuxkm_test_pkcs1_sha256);

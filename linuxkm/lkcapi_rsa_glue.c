@@ -62,7 +62,7 @@ static int pkcs1_sha256_loaded = 0;
 static int pkcs1_sha512_loaded = 0;
 
 struct km_rsa_ctx {
-    WC_RNG       rng;            /* needed for padding, blinding */
+    WC_RNG       rng;            /* needed for pkcs1 padding, and blinding */
     byte         block_enc[512]; /* large enough for RSA 4096 */
     byte         block_dec[512];
     int          hash_oid;       /* hash_oid for wc_EncodeSignature */
@@ -71,26 +71,23 @@ struct km_rsa_ctx {
     RsaKey *     key;
 };
 
-/**
- * generic rsa callbacks.
- * */
-static int          km_rsa_init_common(struct crypto_akcipher *tfm,
-                                     int hash_oid);
+/* shared rsa callbacks */
+static int          km_rsa_init(struct crypto_akcipher *tfm, int hash_oid);
 static void         km_rsa_exit(struct crypto_akcipher *tfm);
-#if defined(LINUXKM_DIRECT_RSA)
-static int          km_direct_rsa_init(struct crypto_akcipher *tfm);
-static int          km_direct_rsa_enc(struct akcipher_request *req);
-static int          km_direct_rsa_dec(struct akcipher_request *req);
-#endif /* LINUXKM_DIRECT_RSA */
 static int          km_rsa_set_priv(struct crypto_akcipher *tfm,
                                      const void *key, unsigned int keylen);
 static int          km_rsa_set_pub(struct crypto_akcipher *tfm,
                                     const void *key, unsigned int keylen);
 static unsigned int km_rsa_max_size(struct crypto_akcipher *tfm);
 
-/**
- * pkcs1 specific callbacks.
- * */
+#if defined(LINUXKM_DIRECT_RSA)
+/* direct rsa callbacks */
+static int          km_direct_rsa_init(struct crypto_akcipher *tfm);
+static int          km_direct_rsa_enc(struct akcipher_request *req);
+static int          km_direct_rsa_dec(struct akcipher_request *req);
+#endif /* LINUXKM_DIRECT_RSA */
+
+/* pkcs1 callbacks */
 static int          km_pkcs1_sha256_init(struct crypto_akcipher *tfm);
 static int          km_pkcs1_sha512_init(struct crypto_akcipher *tfm);
 static int          km_pkcs1_sign(struct akcipher_request *req);
@@ -149,7 +146,7 @@ static struct akcipher_alg pkcs1_sha512 = {
     .exit                 = km_rsa_exit,
 };
 
-static int km_rsa_init_common(struct crypto_akcipher *tfm, int hash_oid)
+static int km_rsa_init(struct crypto_akcipher *tfm, int hash_oid)
 {
     struct km_rsa_ctx * ctx = NULL;
     int                 ret = 0;
@@ -482,7 +479,7 @@ static unsigned int km_rsa_max_size(struct crypto_akcipher *tfm)
 #if defined(LINUXKM_DIRECT_RSA)
 static int km_direct_rsa_init(struct crypto_akcipher *tfm)
 {
-    return km_rsa_init_common(tfm, 0);
+    return km_rsa_init(tfm, 0);
 }
 #endif /* LINUXKM_DIRECT_RSA */
 
@@ -508,12 +505,12 @@ static void km_rsa_exit(struct crypto_akcipher *tfm)
 
 static int km_pkcs1_sha256_init(struct crypto_akcipher *tfm)
 {
-    return km_rsa_init_common(tfm, SHA256h);
+    return km_rsa_init(tfm, SHA256h);
 }
 
 static int km_pkcs1_sha512_init(struct crypto_akcipher *tfm)
 {
-    return km_rsa_init_common(tfm, SHA512h);
+    return km_rsa_init(tfm, SHA512h);
 }
 
 static int km_pkcs1_sign(struct akcipher_request *req)
