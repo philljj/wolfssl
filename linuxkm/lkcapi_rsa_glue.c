@@ -28,10 +28,16 @@
     (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
      defined(LINUXKM_LKCAPI_REGISTER_RSA))
 
-    #if defined(WOLFSSL_RSA_VERIFY_ONLY) || \
-        defined(WOLFSSL_RSA_PUBLIC_ONLY)
-        #error LINUXKM_LKCAPI_REGISTER_RSA and RSA_VERIFY_ONLY not supported
-    #endif /* WOLFSSL_RSA_VERIFY_ONLY || WOLFSSL_RSA_PUBLIC_ONLY */
+#if defined(WOLFSSL_RSA_VERIFY_ONLY) || \
+    defined(WOLFSSL_RSA_PUBLIC_ONLY)
+    #error LINUXKM_LKCAPI_REGISTER_RSA and RSA_VERIFY_ONLY not supported
+#endif /* WOLFSSL_RSA_VERIFY_ONLY || WOLFSSL_RSA_PUBLIC_ONLY */
+
+#if defined(WC_RSA_DIRECT) || defined(WC_RSA_NO_PADDING) || \
+    defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
+    #define LINUXKM_DIRECT_RSA
+#endif /* WC_RSA_DIRECT || WC_RSA_NO_PADDING || OPENSSL_EXTRA ||
+        * OPENSSL_EXTRA_X509_SMALL */
 
 #include <wolfssl/wolfcrypt/asn.h>
 #include <wolfssl/wolfcrypt/rsa.h>
@@ -39,7 +45,9 @@
 #define WOLFKM_RSA_NAME      "rsa"
 #define WOLFKM_RSA_DRIVER    ("rsa" WOLFKM_DRIVER_SUFFIX)
 
+#if defined(LINUXKM_DIRECT_RSA)
 static int  linuxkm_test_rsa_driver(const char * driver, int nbits);
+#endif /* LINUXKM_DIRECT_RSA */
 static int  linuxkm_test_pkcs1_driver(const char * driver, int nbits,
                                       int hash_oid, word32 hash_len);
 #ifdef WOLFKM_DEBUG_RSA_VERBOSE
@@ -47,7 +55,9 @@ static void km_rsa_dump_hex(const char * what, const byte * data,
                             word32 data_len);
 #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
-static int rsaAlg_loaded = 0;
+#if defined(LINUXKM_DIRECT_RSA)
+static int direct_rsa_loaded = 0;
+#endif /* LINUXKM_DIRECT_RSA */
 static int pkcs1_sha256_loaded = 0;
 static int pkcs1_sha512_loaded = 0;
 
@@ -66,10 +76,12 @@ struct km_rsa_ctx {
  * */
 static int          km_rsa_init_common(struct crypto_akcipher *tfm,
                                      int hash_oid);
-static int          km_rsa_init(struct crypto_akcipher *tfm);
 static void         km_rsa_exit(struct crypto_akcipher *tfm);
-static int          km_rsa_enc(struct akcipher_request *req);
-static int          km_rsa_dec(struct akcipher_request *req);
+#if defined(LINUXKM_DIRECT_RSA)
+static int          km_direct_rsa_init(struct crypto_akcipher *tfm);
+static int          km_direct_rsa_enc(struct akcipher_request *req);
+static int          km_direct_rsa_dec(struct akcipher_request *req);
+#endif /* LINUXKM_DIRECT_RSA */
 static int          km_rsa_set_priv(struct crypto_akcipher *tfm,
                                      const void *key, unsigned int keylen);
 static int          km_rsa_set_pub(struct crypto_akcipher *tfm,
@@ -86,13 +98,14 @@ static int          km_pkcs1_verify(struct akcipher_request *req);
 static int          km_pkcs1_enc(struct akcipher_request *req);
 static int          km_pkcs1_dec(struct akcipher_request *req);
 
-static struct akcipher_alg rsaAlg = {
+#if defined(LINUXKM_DIRECT_RSA)
+static struct akcipher_alg direct_rsa = {
     .base.cra_name        = WOLFKM_RSA_NAME,
     .base.cra_driver_name = WOLFKM_RSA_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_rsa_ctx),
-    .encrypt              = km_rsa_enc,
+    .encrypt              = km_direct_rsa_enc,
     .decrypt              = km_rsa_dec,
     .set_priv_key         = km_rsa_set_priv,
     .set_pub_key          = km_rsa_set_pub,
@@ -100,6 +113,7 @@ static struct akcipher_alg rsaAlg = {
     .init                 = km_rsa_init,
     .exit                 = km_rsa_exit,
 };
+#endif /* LINUXKM_DIRECT_RSA */
 
 static struct akcipher_alg pkcs1_sha256 = {
     .base.cra_name        = "pkcs1pad(rsa,sha256)",
@@ -192,6 +206,7 @@ static int km_rsa_init_common(struct crypto_akcipher *tfm, int hash_oid)
     return 0;
 }
 
+#if defined(LINUXKM_DIRECT_RSA)
 /**
  * RSA encrypt with public key.
  *
@@ -200,7 +215,7 @@ static int km_rsa_init_common(struct crypto_akcipher *tfm, int hash_oid)
  * returns 0   on success
  * returns < 0 on error
  * */
-static int km_rsa_enc(struct akcipher_request *req)
+static int km_direct_rsa_enc(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_rsa_ctx *      ctx = NULL;
@@ -255,7 +270,7 @@ static int km_rsa_enc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_rsa_enc\n");
+    pr_info("info: exiting km_direct_rsa_enc\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -268,7 +283,7 @@ static int km_rsa_enc(struct akcipher_request *req)
  * returns 0   on success
  * returns < 0 on error
  * */
-static int km_rsa_dec(struct akcipher_request *req)
+static int km_direct_rsa_dec(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_rsa_ctx *      ctx = NULL;
@@ -323,10 +338,11 @@ static int km_rsa_dec(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_rsa_dec\n");
+    pr_info("info: exiting km_direct_rsa_dec\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
+#endif /* LINUXKM_DIRECT_RSA */
 
 /**
  * Decodes and sets the RSA private key.
@@ -463,14 +479,12 @@ static unsigned int km_rsa_max_size(struct crypto_akcipher *tfm)
     return (unsigned int) ctx->encrypt_len;
 }
 
-/**
- * Init the rsa ctx. The RNG is needed for padding
- * and blinding.
- * */
-static int km_rsa_init(struct crypto_akcipher *tfm)
+#if defined(LINUXKM_DIRECT_RSA)
+static int km_direct_rsa_init(struct crypto_akcipher *tfm)
 {
     return km_rsa_init_common(tfm, 0);
 }
+#endif /* LINUXKM_DIRECT_RSA */
 
 static void km_rsa_exit(struct crypto_akcipher *tfm)
 {
@@ -701,7 +715,7 @@ static int km_pkcs1_enc(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_rsa_dec\n");
+    pr_info("info: exiting km_pkcs1_enc\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
@@ -745,12 +759,12 @@ static int km_pkcs1_dec(struct akcipher_request *req)
     scatterwalk_map_and_copy(ctx->block_enc, req->dst, 0, encrypt_len, 1);
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: exiting km_rsa_dec\n");
+    pr_info("info: exiting km_pkcs1_dec\n");
     #endif /* WOLFKM_DEBUG_RSA */
     return 0;
 }
 
-
+#if defined(LINUXKM_DIRECT_RSA)
 /**
  * Tests implemented below.
  * */
@@ -783,6 +797,7 @@ static int linuxkm_test_rsa(void)
 
     return rc;
 }
+#endif /* LINUXKM_DIRECT_RSA */
 
 static int linuxkm_test_pkcs1_sha256(void)
 {
@@ -851,6 +866,7 @@ static int linuxkm_test_pkcs1_sha512(void)
     return rc;
 }
 
+#if defined(LINUXKM_DIRECT_RSA)
 /**
  * Test linux kernel crypto driver:
  *   1. generate RSA key with wolfcrypt.
@@ -1173,6 +1189,7 @@ test_rsa_end:
 
     return test_rc;
 }
+#endif /* LINUXKM_DIRECT_RSA */
 
 static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
                                      int hash_oid, word32 hash_len)
@@ -1470,10 +1487,6 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_pkcs1_end;
     }
-
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    pr_info("info: %zu: %s\n", strlen((const char *)dec), dec);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     test_rc = 0;
 test_pkcs1_end:
