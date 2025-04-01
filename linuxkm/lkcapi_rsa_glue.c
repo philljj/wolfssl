@@ -57,7 +57,6 @@ struct km_rsa_ctx {
     byte         block_dec[512];
     int          hash_oid;       /* hash_oid for wc_EncodeSignature */
     unsigned int digest_len;
-    /* encrypt_len member? Set it in set_pub_key and priv_key */
     int          encrypt_len;
     RsaKey *     key;
 };
@@ -752,12 +751,9 @@ static int km_pkcs1_dec(struct akcipher_request *req)
 }
 
 
-
-
 /**
  * Tests implemented below.
  * */
-
 static int linuxkm_test_rsa(void)
 {
     int rc = 0;
@@ -984,7 +980,9 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         goto test_rsa_end;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
     km_rsa_dump_hex("enc", enc, encrypt_len);
+    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     memset(dec, 0, encrypt_len);
     dec_ret = wc_RsaDirect(enc, encrypt_len, dec, &out_len, key,
@@ -1045,10 +1043,6 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         goto test_rsa_end;
     }
 
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    //km_rsa_dump_hex("pub", pub, pub_len);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
-
     /**
      * Now allocate the akcipher transform, and set up
      * the akcipher request.
@@ -1094,7 +1088,9 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         goto test_rsa_end;
     }
 
+    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
     km_rsa_dump_hex("enc", enc, encrypt_len);
+    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
     memset(dec, 0, encrypt_len + 1);
     dec_ret = wc_RsaDirect(enc, encrypt_len, dec, &out_len, key,
                            RSA_PRIVATE_DECRYPT, &rng);
@@ -1109,10 +1105,6 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
-
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    pr_info("info: %zu: %s\n", strlen((const char *)dec), dec);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     /* kernel module decrypt with rsa private key */
     enc_ret = wc_RsaDirect(dec, encrypt_len, enc, &out_len, key,
@@ -1139,10 +1131,6 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         }
     }
 
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    //km_rsa_dump_hex("priv", priv, priv_len);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
-
     sg_init_one(&src, enc, encrypt_len);
     sg_init_one(&dst, dec, encrypt_len);
 
@@ -1160,10 +1148,6 @@ static int linuxkm_test_rsa_driver(const char * driver, int nbits)
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_rsa_end;
     }
-
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    pr_info("info: %zu: %s\n", strlen((const char *)dec), dec);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     test_rc = 0;
 
@@ -1381,10 +1365,6 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         pr_err("error: decrypt doesn't match plain: %d\n", n_diff);
         goto test_pkcs1_end;
     }
-
-    #ifdef WOLFKM_DEBUG_RSA_VERBOSE
-    pr_info("info: %zu: %s\n", strlen((const char *)dec), dec);
-    #endif /* WOLFKM_DEBUG_RSA_VERBOSE */
 
     /**
      * Allocate the akcipher transform, and set up
