@@ -45,11 +45,13 @@
 #define WOLFKM_RSA_NAME      "rsa"
 #define WOLFKM_RSA_DRIVER    ("rsa" WOLFKM_DRIVER_SUFFIX)
 
+#if defined(WOLFSSL_KEY_GEN)
 #if defined(LINUXKM_DIRECT_RSA)
 static int  linuxkm_test_rsa_driver(const char * driver, int nbits);
 #endif /* LINUXKM_DIRECT_RSA */
 static int  linuxkm_test_pkcs1_driver(const char * driver, int nbits,
                                       int hash_oid, word32 hash_len);
+#endif /* WOLFSSL_KEY_GEN */
 #ifdef WOLFKM_DEBUG_RSA_VERBOSE
 static void km_rsa_dump_hex(const char * what, const byte * data,
                             word32 data_len);
@@ -238,7 +240,7 @@ static int km_direct_rsa_enc(struct akcipher_request *req)
 
     out_len = key_len;
 
-    if (unlikely(req->src_len != (unsigned int) key_len)) {
+    if (unlikely(req->src_len > (unsigned int) key_len)) {
         pr_err("error: %s: got %d, expected %d\n",
                WOLFKM_RSA_DRIVER, req->src_len, key_len);
         return -EINVAL;
@@ -251,8 +253,9 @@ static int km_direct_rsa_enc(struct akcipher_request *req)
     }
 
     /* copy req->src to ctx->block_dec */
-    scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src_len, 0);
+    memset(ctx->block_dec, 0, sizeof(ctx->block_dec));
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
+    scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src_len, 0);
 
     err = wc_RsaDirect(ctx->block_dec, key_len, ctx->block_enc,
                        &out_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
@@ -787,14 +790,20 @@ static int km_pkcs1_dec(struct akcipher_request *req)
     return 0;
 }
 
-#if defined(LINUXKM_DIRECT_RSA)
+#if defined(LINUXKM_DIRECT_RSA) && defined(WC_RSA_NO_PADDING)
 /**
  * Tests implemented below.
  * */
 static int linuxkm_test_rsa(void)
 {
     int rc = 0;
+    rc = rsa_no_pad_test();
+    if (rc != 0) {
+        pr_err("rsa_no_pad_test() failed with retval %d.\n", rc);
+        return rc;
+    }
 
+    #ifdef WOLFSSL_KEY_GEN
     /* test wolfcrypt RSA API vs wolfkm RSA driver. */
     rc = linuxkm_test_rsa_driver(WOLFKM_RSA_DRIVER, 2048);
     if (rc) { return rc; }
@@ -817,6 +826,7 @@ static int linuxkm_test_rsa(void)
     rc = linuxkm_test_rsa_driver("rsa-generic", 4096);
     if (rc) { return rc; }
     #endif /* WOLFKM_DEBUG_RSA */
+    #endif /* WOLFSSL_KEY_GEN */
 
     return rc;
 }
@@ -826,6 +836,7 @@ static int linuxkm_test_pkcs1_sha256(void)
 {
     int rc = 0;
 
+    #ifdef WOLFSSL_KEY_GEN
     #ifdef WOLFKM_DEBUG_RSA
     rc = linuxkm_test_pkcs1_driver("pkcs1pad(rsa-generic,sha256)", 2048,
                                    SHA256h, 32);
@@ -851,7 +862,7 @@ static int linuxkm_test_pkcs1_sha256(void)
     rc = linuxkm_test_pkcs1_driver("pkcs1pad(rsa-wolfcrypt,sha256)", 4096,
                                    SHA256h, 32);
     if (rc) { return rc; }
-
+    #endif /* WOLFSSL_KEY_GEN */
 
     return rc;
 }
@@ -860,6 +871,7 @@ static int linuxkm_test_pkcs1_sha512(void)
 {
     int rc = 0;
 
+    #ifdef WOLFSSL_KEY_GEN
     #ifdef WOLFKM_DEBUG_RSA
     rc = linuxkm_test_pkcs1_driver("pkcs1pad(rsa-generic,sha512)", 2048,
                                    SHA512h, 64);
@@ -885,11 +897,12 @@ static int linuxkm_test_pkcs1_sha512(void)
     rc = linuxkm_test_pkcs1_driver("pkcs1pad(rsa-wolfcrypt,sha512)", 4096,
                                    SHA512h, 64);
     if (rc) { return rc; }
+    #endif /* WOLFSSL_KEY_GEN */
 
     return rc;
 }
 
-#if defined(LINUXKM_DIRECT_RSA)
+#if defined(LINUXKM_DIRECT_RSA) && defined(WOLFSSL_KEY_GEN)
 /**
  * Test linux kernel crypto driver:
  *   1. generate RSA key with wolfcrypt.
@@ -1214,6 +1227,7 @@ test_rsa_end:
 }
 #endif /* LINUXKM_DIRECT_RSA */
 
+#if defined(WOLFSSL_KEY_GEN)
 static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
                                      int hash_oid, word32 hash_len)
 {
@@ -1530,6 +1544,7 @@ test_pkcs1_end:
 
     return test_rc;
 }
+#endif /* WOLFSSL_KEY_GEN */
 
 #ifdef WOLFKM_DEBUG_RSA_VERBOSE
 static void km_rsa_dump_hex(const char * what, const byte * data,

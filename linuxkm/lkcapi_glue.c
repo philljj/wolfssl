@@ -2321,8 +2321,6 @@ static int ecbAesAlg_loaded = 0;
 
 #endif /* LINUXKM_LKCAPI_REGISTER_AESECB */
 
-#include "linuxkm/lkcapi_rsa_glue.c"
-
 /* cipher tests, cribbed from test.c, with supplementary LKCAPI tests: */
 
 #ifdef LINUXKM_LKCAPI_REGISTER_AESCBC
@@ -4188,6 +4186,19 @@ static int linuxkm_test_aesecb(void) {
 
 #endif /* !NO_AES */
 
+#if !defined(NO_RSA)
+    #if (defined(LINUXKM_LKCAPI_REGISTER_ALL) && !defined(LINUXKM_LKCAPI_DONT_REGISTER_RSA)) && \
+        !defined(LINUXKM_LKCAPI_REGISTER_RSA)
+        #define LINUXKM_LKCAPI_REGISTER_RSA
+    #endif
+#else
+    #undef LINUXKM_LKCAPI_REGISTER_RSA
+#endif /* !NO_RSA */
+
+#if defined(LINUXKM_LKCAPI_REGISTER_RSA)
+    #include "linuxkm/lkcapi_rsa_glue.c"
+#endif /* LINUXKM_LKCAPI_REGISTER_RSA */
+
 static int linuxkm_lkcapi_register(void)
 {
     int ret = 0;
@@ -4272,10 +4283,7 @@ static int linuxkm_lkcapi_register(void)
     REGISTER_ALG(ecbAesAlg, crypto_register_skcipher, linuxkm_test_aesecb);
 #endif
 
-#if !defined(NO_RSA) && \
-    (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
-     defined(LINUXKM_LKCAPI_REGISTER_RSA))
-
+#ifdef LINUXKM_LKCAPI_REGISTER_RSA
     #if defined(LINUXKM_DIRECT_RSA)
     REGISTER_ALG(direct_rsa, crypto_register_akcipher, linuxkm_test_rsa);
     #endif /* LINUXKM_DIRECT_RSA */
