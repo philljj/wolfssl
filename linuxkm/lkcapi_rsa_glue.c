@@ -211,6 +211,10 @@ static int km_rsa_init(struct crypto_akcipher *tfm, int hash_oid)
  *
  * Requires that crypto_akcipher_set_pub_key has been called first.
  *
+ * This matches behavior of kernel rsa-generic akcipher, which does
+ * direct RSA withput padding, and without requiring src_len matches
+ * RSA key size.
+ *
  * returns 0   on success
  * returns < 0 on error
  * */
@@ -257,14 +261,11 @@ static int km_direct_rsa_enc(struct akcipher_request *req)
     memset(ctx->block_enc, 0, sizeof(ctx->block_enc));
     scatterwalk_map_and_copy(ctx->block_dec, req->src, 0, req->src_len, 0);
 
-    //err = wc_RsaDirect(ctx->block_dec, key_len, ctx->block_enc,
-    //                   &out_len, ctx->key, RSA_PUBLIC_ENCRYPT, &ctx->rng);
+    /* note: matching behavior of kernel rsa-generic. */
+    err = wc_RsaFunction(ctx->block_dec, req->src_len, ctx->block_enc,
+                         &out_len, RSA_PUBLIC_ENCRYPT, ctx->key, &ctx->rng);
 
-    err = wc_RsaPublicEncrypt_ex(ctx->block_dec, key_len, ctx->block_enc,
-                                 out_len, ctx->key, &ctx->rng, WC_RSA_NO_PAD, 
-                                 WC_HASH_TYPE_NONE, WC_MGF1NONE, NULL, 0);
-
-    if (unlikely(err != (int) key_len || key_len != out_len)) {
+    if (unlikely(err)) {
         pr_err("error: %s: rsa pub enc returned: %d, %d, %d\n",
                WOLFKM_RSA_DRIVER, err, out_len, key_len);
         return -EINVAL;
