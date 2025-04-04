@@ -289,6 +289,14 @@
         #include <crypto/internal/aead.h>
         #include <crypto/internal/skcipher.h>
 
+        #if !defined(NO_RSA) && \
+            (defined(LINUXKM_LKCAPI_REGISTER_ALL) || \
+             defined(LINUXKM_LKCAPI_REGISTER_RSA))
+            #include <crypto/internal/akcipher.h>
+        #endif /* !NO_RSA &&
+                * (LINUXKM_LKCAPI_REGISTER_ALL || LINUXKM_LKCAPI_REGISTER_RSA)
+                */
+
         /* the LKCAPI assumes that expanded encrypt and decrypt keys will stay
          * loaded simultaneously, and the Linux in-tree implementations have two
          * AES key structs in each context, one for each direction.  in
