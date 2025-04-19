@@ -293,6 +293,17 @@ WC_MAYBE_UNUSED static int check_shash_driver_masking(struct crypto_shash *tfm, 
     #endif /* LINUXKM_LKCAPI_REGISTER_RSA */
 #endif /* linux >= 6.13.0 */
 
+#if (defined(LINUXKM_LKCAPI_REGISTER_ALL) && !defined(LINUXKM_LKCAPI_DONT_REGISTER_DH)) && \
+    !defined(LINUXKM_LKCAPI_REGISTER_DH)
+    #define LINUXKM_LKCAPI_REGISTER_DH
+#endif
+
+#if defined (LINUXKM_LKCAPI_REGISTER_DH) && !defined(WOLFSSL_DH_EXTRA) || \
+   !defined(WOLFSSL_DH_GEN_PUB)
+     /* not supported without WOLFSSL_DH_EXTRA && WOLFSSL_DH_GEN_PUB */
+    #undef LINUXKM_LKCAPI_REGISTER_DH
+#endif /* LINUXKM_LKCAPI_REGISTER_DH */
+
 #if defined (LINUXKM_LKCAPI_REGISTER_ECDSA)
     #include "linuxkm/lkcapi_ecdsa_glue.c"
 #endif /* LINUXKM_LKCAPI_REGISTER_ECDSA */
@@ -304,6 +315,10 @@ WC_MAYBE_UNUSED static int check_shash_driver_masking(struct crypto_shash *tfm, 
 #if defined(LINUXKM_LKCAPI_REGISTER_RSA)
     #include "linuxkm/lkcapi_rsa_glue.c"
 #endif /* LINUXKM_LKCAPI_REGISTER_RSA */
+
+#if defined (LINUXKM_LKCAPI_REGISTER_DH)
+    #include "linuxkm/lkcapi_dh_glue.c"
+#endif /* LINUXKM_LKCAPI_REGISTER_DH */
 
 static int linuxkm_lkcapi_register(void)
 {
@@ -491,6 +506,17 @@ static int linuxkm_lkcapi_register(void)
     #endif /* WOLFSSL_SHA512 */
 #endif
 
+#ifdef LINUXKM_LKCAPI_REGISTER_DH
+    REGISTER_ALG(dh, crypto_register_kpp, linuxkm_test_dh);
+    #ifdef HAVE_FFDHE_2048
+    REGISTER_ALG(ffdhe2048, crypto_register_kpp, linuxkm_test_ffdhe2048);
+    #endif /* HAVE_FFDHE_2048 */
+
+    #ifdef HAVE_FFDHE_3072
+    REGISTER_ALG(ffdhe3072, crypto_register_kpp, linuxkm_test_ffdhe3072);
+    #endif /* HAVE_FFDHE_3072 */
+#endif /* LINUXKM_LKCAPI_REGISTER_DH */
+
 #undef REGISTER_ALG
 
     out:
@@ -628,6 +654,17 @@ static void linuxkm_lkcapi_unregister(void)
         UNREGISTER_ALG(pkcs1_sha512, crypto_unregister_akcipher);
     #endif /* WOLFSSL_SHA512 */
 #endif /* LINUXKM_LKCAPI_REGISTER_RSA */
+
+#ifdef LINUXKM_LKCAPI_REGISTER_DH
+    UNREGISTER_ALG(dh, crypto_unregister_kpp);
+    #ifdef HAVE_FFDHE_2048
+    UNREGISTER_ALG(ffdhe2048, crypto_unregister_kpp);
+    #endif /* HAVE_FFDHE_2048 */
+
+    #ifdef HAVE_FFDHE_3072
+    UNREGISTER_ALG(ffdhe3072, crypto_unregister_kpp);
+    #endif /* HAVE_FFDHE_3072 */
+#endif /* LINUXKM_LKCAPI_REGISTER_DH */
 
 #undef UNREGISTER_ALG
 }
