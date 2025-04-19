@@ -330,9 +330,9 @@ static int km_dh_set_secret(struct crypto_kpp *tfm, const void *buf,
     struct km_dh_ctx * ctx = NULL;
     struct dh          params;
 
-    #ifdef WOLFKM_DEBUG_DH_VERBOSE
+    #if 0
     km_dump_data("secret", buf, len);
-    #endif /* WOLFKM_DEBUG_DH_VERBOSE */
+    #endif
 
     ctx = kpp_tfm_ctx(tfm);
     memset(&params, 0, sizeof(params));
@@ -438,9 +438,9 @@ static int km_ffdhe_set_secret(struct crypto_kpp *tfm, const void *buf,
     ctx = kpp_tfm_ctx(tfm);
     memset(&params, 0, sizeof(params));
 
-    #ifdef WOLFKM_DEBUG_DH_VERBOSE
+    #if 0
     km_dump_data("secret", buf, len);
-    #endif /* WOLFKM_DEBUG_DH_VERBOSE */
+    #endif
 
     if (buf) {
         /* use decode key helper so we observe the same format. */
@@ -799,8 +799,11 @@ static int km_dh_compute_shared_secret(struct kpp_request *req)
 
     #if 0
     km_dump_data("pub", pub, pub_len);
-    km_dump_data("shared_secret", shared_secret, shared_secret_len);
     #endif
+
+    #ifdef WOLFKM_DEBUG_DH_VERBOSE
+    km_dump_data("shared_secret", shared_secret, shared_secret_len);
+    #endif /* WOLFKM_DEBUG_DH_VERBOSE */
 
     if (req->dst_len < shared_secret_len) {
         err = -EOVERFLOW;
