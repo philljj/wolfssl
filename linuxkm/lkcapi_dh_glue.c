@@ -73,6 +73,12 @@
                                      "-wolfcrypt)")
 #endif /* HAVE_FFDHE_6144 */
 
+#ifdef HAVE_FFDHE_8192
+    #define WOLFKM_FFDHE8192_NAME   ("ffdhe8192(dh)")
+    #define WOLFKM_FFDHE8192_DRIVER ("ffdhe8192(" WOLFKM_DRIVER_FIPS \
+                                     "-wolfcrypt)")
+#endif /* HAVE_FFDHE_8192 */
+
 #define DH_KPP_SECRET_MIN_SIZE (sizeof(struct kpp_secret) + 3 * sizeof(int))
 
 static inline const u8 *km_dh_unpack_data(void *dst, const u8 *src, size_t size)
@@ -142,14 +148,14 @@ static inline const u8 *dh_unpack_data(void *dst, const u8 * src, size_t size)
     return src + size;
 }
 
-static int linuxkm_test_dh_driver(const char * driver,
-                                  const byte * b_pub,
-                                  const byte * expected_a_pub,
-                                  word32 pub_len,
-                                  const byte * secret,
-                                  word32 secret_len,
-                                  const byte * shared_secret,
-                                  word32 shared_s_len);
+static int linuxkm_test_kpp_driver(const char * driver,
+                                   const byte * b_pub,
+                                   const byte * expected_a_pub,
+                                   word32 pub_len,
+                                   const byte * secret,
+                                   word32 secret_len,
+                                   const byte * shared_secret,
+                                   word32 shared_s_len);
 
 static int dh_loaded = 0;
 
@@ -168,6 +174,10 @@ static int ffdhe4096_loaded = 0;
 #ifdef HAVE_FFDHE_6144
 static int ffdhe6144_loaded = 0;
 #endif /* HAVE_FFDHE_6144 */
+
+#ifdef HAVE_FFDHE_8192
+static int ffdhe8192_loaded = 0;
+#endif /* HAVE_FFDHE_8192 */
 
 struct km_dh_ctx {
     WC_RNG     rng; /* needed for keypair gen and timing resistance*/
@@ -212,6 +222,9 @@ static int          km_ffdhe4096_init(struct crypto_kpp *tfm);
 #ifdef HAVE_FFDHE_6144
 static int          km_ffdhe6144_init(struct crypto_kpp *tfm);
 #endif /* HAVE_FFDHE_6144 */
+#ifdef HAVE_FFDHE_8192
+static int          km_ffdhe8192_init(struct crypto_kpp *tfm);
+#endif /* HAVE_FFDHE_8192 */
 
 static struct kpp_alg dh = {
     .base.cra_name         = WOLFKM_DH_NAME,
@@ -290,6 +303,22 @@ static struct kpp_alg ffdhe6144 = {
     .exit                  = km_dh_exit,
 };
 #endif /* HAVE_FFDHE_6144 */
+
+#ifdef HAVE_FFDHE_8192
+static struct kpp_alg ffdhe8192 = {
+    .base.cra_name         = WOLFKM_FFDHE8192_NAME,
+    .base.cra_driver_name  = WOLFKM_FFDHE8192_DRIVER,
+    .base.cra_priority     = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+    .base.cra_module       = THIS_MODULE,
+    .base.cra_ctxsize      = sizeof(struct km_dh_ctx),
+    .set_secret            = km_ffdhe_set_secret,
+    .generate_public_key   = km_dh_gen_pub,
+    .compute_shared_secret = km_dh_compute_shared_secret,
+    .max_size              = km_ffdhe_max_size,
+    .init                  = km_ffdhe8192_init,
+    .exit                  = km_dh_exit,
+};
+#endif /* HAVE_FFDHE_8192 */
 
 /*
  *
@@ -740,6 +769,13 @@ static int km_ffdhe6144_init(struct crypto_kpp *tfm)
 }
 #endif /* HAVE_FFDHE_6144 */
 
+#ifdef HAVE_FFDHE_8192
+static int km_ffdhe8192_init(struct crypto_kpp *tfm)
+{
+    return km_ffdhe_init(tfm, WC_FFDHE_8192);
+}
+#endif /* HAVE_FFDHE_8192 */
+
 /**
  * Generate the dh public key:
  *   - req->src should be null
@@ -1014,16 +1050,16 @@ static int linuxkm_test_dh(void)
         0x8a, 0x68, 0xc1, 0x5b, 0x82, 0xb9, 0x0d, 0x00, 0x32, 0x50, 0xed, 0x88, 0x87, 0x48, 0x92, 0x17
     };
 
-    rc = linuxkm_test_dh_driver("dh-generic",
-                                b_pub, expected_a_pub, sizeof(b_pub),
-                                secret, sizeof(secret),
-                                shared_secret, sizeof(shared_secret));
+    rc = linuxkm_test_kpp_driver("dh-generic",
+                                 b_pub, expected_a_pub, sizeof(b_pub),
+                                 secret, sizeof(secret),
+                                 shared_secret, sizeof(shared_secret));
     if (rc) { return rc; }
 
-    rc = linuxkm_test_dh_driver(WOLFKM_DH_DRIVER,
-                                b_pub, expected_a_pub, sizeof(b_pub),
-                                secret, sizeof(secret),
-                                shared_secret, sizeof(shared_secret));
+    rc = linuxkm_test_kpp_driver(WOLFKM_DH_DRIVER,
+                                 b_pub, expected_a_pub, sizeof(b_pub),
+                                 secret, sizeof(secret),
+                                 shared_secret, sizeof(shared_secret));
 
     return rc;
 }
@@ -1060,14 +1096,22 @@ static int linuxkm_test_ffdhe6144(void)
 }
 #endif /* HAVE_FFDHE_6144 */
 
-static int linuxkm_test_dh_driver(const char * driver,
-                                  const byte * b_pub,
-                                  const byte * expected_a_pub,
-                                  word32 pub_len,
-                                  const byte * secret,
-                                  word32 secret_len,
-                                  const byte * shared_secret,
-                                  word32 shared_s_len)
+#ifdef HAVE_FFDHE_8192
+static int linuxkm_test_ffdhe8192(void)
+{
+    int rc = 0;
+    return rc;
+}
+#endif /* HAVE_FFDHE_8192 */
+
+static int linuxkm_test_kpp_driver(const char * driver,
+                                   const byte * b_pub,
+                                   const byte * expected_a_pub,
+                                   word32 pub_len,
+                                   const byte * secret,
+                                   word32 secret_len,
+                                   const byte * shared_secret,
+                                   word32 shared_s_len)
 {
     int                  test_rc = -1;
     struct crypto_kpp *  tfm = NULL;
@@ -1086,33 +1130,33 @@ static int linuxkm_test_dh_driver(const char * driver,
     if (IS_ERR(tfm)) {
         pr_err("error: allocating kpp algorithm %s failed: %ld\n",
                driver, PTR_ERR(tfm));
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     req = kpp_request_alloc(tfm, GFP_KERNEL);
     if (IS_ERR(req)) {
         pr_err("error: allocating kpp request %s failed\n",
                driver);
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     err = crypto_kpp_set_secret(tfm, secret, secret_len);
     if (err) {
         pr_err("error: crypto_kpp_set_secret returned: %d\n", err);
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     /* large enough to hold largest req output. */
     dst_len = crypto_kpp_maxsize(tfm);
     if (dst_len <= 0) {
         pr_err("error: crypto_kpp_maxsize returned: %d\n", dst_len);
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     dst_buf = malloc(dst_len);
     if (dst_buf == NULL) {
         pr_err("error: allocating out buf failed");
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     memset(dst_buf, 0, dst_len);
@@ -1125,18 +1169,18 @@ static int linuxkm_test_dh_driver(const char * driver,
     err = crypto_kpp_generate_public_key(req);
     if (err) {
         pr_err("error: crypto_kpp_generate_public_key returned: %d", err);
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     if (memcmp(expected_a_pub, sg_virt(req->dst), pub_len)) {
         pr_err("error: crypto_kpp_generate_public_key: wrong output");
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     src_buf = malloc(src_len);
     if (src_buf == NULL) {
         pr_err("error: allocating in buf failed");
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     memcpy(src_buf, b_pub, pub_len);
@@ -1150,16 +1194,16 @@ static int linuxkm_test_dh_driver(const char * driver,
     err = crypto_kpp_compute_shared_secret(req);
     if (err) {
         pr_err("error: crypto_kpp_compute_shared_secret returned: %d", err);
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     if (memcmp(shared_secret, sg_virt(req->dst), shared_s_len)) {
         pr_err("error: shared secret does not match");
-        goto test_dh_end;
+        goto test_kpp_end;
     }
 
     test_rc = 0;
-test_dh_end:
+test_kpp_end:
     if (req) { kpp_request_free(req); req = NULL; }
     if (tfm) { crypto_free_kpp(tfm); tfm = NULL; }
 
