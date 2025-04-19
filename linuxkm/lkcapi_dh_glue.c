@@ -61,6 +61,18 @@
                                      "-wolfcrypt)")
 #endif /* HAVE_FFDHE_3072 */
 
+#ifdef HAVE_FFDHE_4096
+    #define WOLFKM_FFDHE4096_NAME   ("ffdhe4096(dh)")
+    #define WOLFKM_FFDHE4096_DRIVER ("ffdhe4096(" WOLFKM_DRIVER_FIPS \
+                                     "-wolfcrypt)")
+#endif /* HAVE_FFDHE_4096 */
+
+#ifdef HAVE_FFDHE_6144
+    #define WOLFKM_FFDHE6144_NAME   ("ffdhe6144(dh)")
+    #define WOLFKM_FFDHE6144_DRIVER ("ffdhe6144(" WOLFKM_DRIVER_FIPS \
+                                     "-wolfcrypt)")
+#endif /* HAVE_FFDHE_6144 */
+
 #define DH_KPP_SECRET_MIN_SIZE (sizeof(struct kpp_secret) + 3 * sizeof(int))
 
 static inline const u8 *km_dh_unpack_data(void *dst, const u8 *src, size_t size)
@@ -149,6 +161,14 @@ static int ffdhe2048_loaded = 0;
 static int ffdhe3072_loaded = 0;
 #endif /* HAVE_FFDHE_3072 */
 
+#ifdef HAVE_FFDHE_4096
+static int ffdhe4096_loaded = 0;
+#endif /* HAVE_FFDHE_4096 */
+
+#ifdef HAVE_FFDHE_6144
+static int ffdhe6144_loaded = 0;
+#endif /* HAVE_FFDHE_6144 */
+
 struct km_dh_ctx {
     WC_RNG     rng; /* needed for keypair gen and timing resistance*/
     DhKey *    key;
@@ -186,6 +206,12 @@ static int          km_ffdhe2048_init(struct crypto_kpp *tfm);
 #ifdef HAVE_FFDHE_3072
 static int          km_ffdhe3072_init(struct crypto_kpp *tfm);
 #endif /* HAVE_FFDHE_3072 */
+#ifdef HAVE_FFDHE_4096
+static int          km_ffdhe4096_init(struct crypto_kpp *tfm);
+#endif /* HAVE_FFDHE_4096 */
+#ifdef HAVE_FFDHE_6144
+static int          km_ffdhe6144_init(struct crypto_kpp *tfm);
+#endif /* HAVE_FFDHE_6144 */
 
 static struct kpp_alg dh = {
     .base.cra_name         = WOLFKM_DH_NAME,
@@ -232,6 +258,38 @@ static struct kpp_alg ffdhe3072 = {
     .exit                  = km_dh_exit,
 };
 #endif /* HAVE_FFDHE_3072 */
+
+#ifdef HAVE_FFDHE_4096
+static struct kpp_alg ffdhe4096 = {
+    .base.cra_name         = WOLFKM_FFDHE4096_NAME,
+    .base.cra_driver_name  = WOLFKM_FFDHE4096_DRIVER,
+    .base.cra_priority     = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+    .base.cra_module       = THIS_MODULE,
+    .base.cra_ctxsize      = sizeof(struct km_dh_ctx),
+    .set_secret            = km_ffdhe_set_secret,
+    .generate_public_key   = km_dh_gen_pub,
+    .compute_shared_secret = km_dh_compute_shared_secret,
+    .max_size              = km_ffdhe_max_size,
+    .init                  = km_ffdhe4096_init,
+    .exit                  = km_dh_exit,
+};
+#endif /* HAVE_FFDHE_4096 */
+
+#ifdef HAVE_FFDHE_6144
+static struct kpp_alg ffdhe6144 = {
+    .base.cra_name         = WOLFKM_FFDHE6144_NAME,
+    .base.cra_driver_name  = WOLFKM_FFDHE6144_DRIVER,
+    .base.cra_priority     = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+    .base.cra_module       = THIS_MODULE,
+    .base.cra_ctxsize      = sizeof(struct km_dh_ctx),
+    .set_secret            = km_ffdhe_set_secret,
+    .generate_public_key   = km_dh_gen_pub,
+    .compute_shared_secret = km_dh_compute_shared_secret,
+    .max_size              = km_ffdhe_max_size,
+    .init                  = km_ffdhe6144_init,
+    .exit                  = km_dh_exit,
+};
+#endif /* HAVE_FFDHE_6144 */
 
 /*
  *
@@ -470,7 +528,9 @@ static int km_ffdhe_set_secret(struct crypto_kpp *tfm, const void *buf,
 
     if (!params.key_size) {
         /* generate the ffdhe key pair*/
-        pr_err("ffdhe todo");
+        #ifdef WOLFKM_DEBUG_DH
+        pr_info("ffdhe gen key pair");
+        #endif
         err = wc_DhGenerateKeyPair(ctx->key, &ctx->rng,
                                    ctx->priv_key, &ctx->priv_len,
                                    ctx->pub_key, &ctx->pub_len);
@@ -665,6 +725,20 @@ static int km_ffdhe3072_init(struct crypto_kpp *tfm)
     return km_ffdhe_init(tfm, WC_FFDHE_3072);
 }
 #endif /* HAVE_FFDHE_3072 */
+
+#ifdef HAVE_FFDHE_4096
+static int km_ffdhe4096_init(struct crypto_kpp *tfm)
+{
+    return km_ffdhe_init(tfm, WC_FFDHE_4096);
+}
+#endif /* HAVE_FFDHE_4096 */
+
+#ifdef HAVE_FFDHE_6144
+static int km_ffdhe6144_init(struct crypto_kpp *tfm)
+{
+    return km_ffdhe_init(tfm, WC_FFDHE_6144);
+}
+#endif /* HAVE_FFDHE_6144 */
 
 /**
  * Generate the dh public key:
@@ -969,6 +1043,22 @@ static int linuxkm_test_ffdhe3072(void)
     return rc;
 }
 #endif /* HAVE_FFDHE_3072 */
+
+#ifdef HAVE_FFDHE_4096
+static int linuxkm_test_ffdhe4096(void)
+{
+    int rc = 0;
+    return rc;
+}
+#endif /* HAVE_FFDHE_4096 */
+
+#ifdef HAVE_FFDHE_6144
+static int linuxkm_test_ffdhe6144(void)
+{
+    int rc = 0;
+    return rc;
+}
+#endif /* HAVE_FFDHE_6144 */
 
 static int linuxkm_test_dh_driver(const char * driver,
                                   const byte * b_pub,

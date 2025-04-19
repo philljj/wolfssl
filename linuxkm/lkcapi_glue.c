@@ -515,6 +515,14 @@ static int linuxkm_lkcapi_register(void)
     #ifdef HAVE_FFDHE_3072
     REGISTER_ALG(ffdhe3072, crypto_register_kpp, linuxkm_test_ffdhe3072);
     #endif /* HAVE_FFDHE_3072 */
+
+    #ifdef HAVE_FFDHE_4096
+    REGISTER_ALG(ffdhe4096, crypto_register_kpp, linuxkm_test_ffdhe4096);
+    #endif /* HAVE_FFDHE_4096 */
+
+    #ifdef HAVE_FFDHE_6144
+    REGISTER_ALG(ffdhe6144, crypto_register_kpp, linuxkm_test_ffdhe6144);
+    #endif /* HAVE_FFDHE_6144 */
 #endif /* LINUXKM_LKCAPI_REGISTER_DH */
 
 #undef REGISTER_ALG
@@ -664,6 +672,14 @@ static void linuxkm_lkcapi_unregister(void)
     #ifdef HAVE_FFDHE_3072
     UNREGISTER_ALG(ffdhe3072, crypto_unregister_kpp);
     #endif /* HAVE_FFDHE_3072 */
+
+    #ifdef HAVE_FFDHE_4096
+    UNREGISTER_ALG(ffdhe4096, crypto_unregister_kpp);
+    #endif /* HAVE_FFDHE_4096 */
+
+    #ifdef HAVE_FFDHE_6144
+    UNREGISTER_ALG(ffdhe6144, crypto_unregister_kpp);
+    #endif /* HAVE_FFDHE_6144 */
 #endif /* LINUXKM_LKCAPI_REGISTER_DH */
 
 #undef UNREGISTER_ALG
