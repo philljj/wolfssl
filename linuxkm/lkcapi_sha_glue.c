@@ -708,6 +708,9 @@ WC_MAYBE_UNUSED static int km_hmac_init_tfm(struct crypto_shash *tfm)
 {
     struct km_sha_hmac_pstate *p_ctx = (struct km_sha_hmac_pstate *)crypto_shash_ctx(tfm);
     int ret = wc_HmacInit(&p_ctx->wc_hmac, NULL /* heap */, INVALID_DEVID);
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_init_tfm: err %d\n", ret);
+    #endif /* WOLFKM_DEBUG_SHA */
     if (ret == 0)
         return 0;
     else
@@ -717,6 +720,9 @@ WC_MAYBE_UNUSED static int km_hmac_init_tfm(struct crypto_shash *tfm)
 WC_MAYBE_UNUSED static void km_hmac_exit_tfm(struct crypto_shash *tfm)
 {
     struct km_sha_hmac_pstate *p_ctx = (struct km_sha_hmac_pstate *)crypto_shash_ctx(tfm);
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_exit_tfm\n");
+    #endif /* WOLFKM_DEBUG_SHA */
     wc_HmacFree(&p_ctx->wc_hmac);
     return;
 }
@@ -731,6 +737,9 @@ WC_MAYBE_UNUSED static int km_hmac_init(struct shash_desc *desc) {
 
     XMEMCPY(t_ctx->wc_hmac, &p_ctx->wc_hmac, sizeof *t_ctx->wc_hmac);
 
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_init\n");
+    #endif /* WOLFKM_DEBUG_SHA */
     return 0;
 }
 
@@ -740,6 +749,10 @@ WC_MAYBE_UNUSED static int km_hmac_update(struct shash_desc *desc, const u8 *dat
     struct km_sha_hmac_state *ctx = (struct km_sha_hmac_state *)shash_desc_ctx(desc);
 
     int ret = wc_HmacUpdate(ctx->wc_hmac, data, len);
+
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_update: err %d, len %d\n", ret, len);
+    #endif /* WOLFKM_DEBUG_SHA */
 
     if (ret == 0)
         return 0;
@@ -755,6 +768,10 @@ WC_MAYBE_UNUSED static int km_hmac_final(struct shash_desc *desc, u8 *out) {
     int ret = wc_HmacFinal(ctx->wc_hmac, out);
 
     km_hmac_free_tstate(ctx);
+
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_final: err %d\n", ret);
+    #endif /* WOLFKM_DEBUG_SHA */
 
     if (ret == 0)
         return 0;
@@ -772,6 +789,10 @@ WC_MAYBE_UNUSED static int km_hmac_finup(struct shash_desc *desc, const u8 *data
     if (ret != 0)
         return -EINVAL;
 
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_finup: err %d, len %d\n", ret, len);
+    #endif /* WOLFKM_DEBUG_SHA */
+
     return km_hmac_final(desc, out);
 }
 
@@ -779,6 +800,11 @@ WC_MAYBE_UNUSED static int km_hmac_digest(struct shash_desc *desc, const u8 *dat
                       unsigned int len, u8 *out)
 {
     int ret = km_hmac_init(desc);
+
+    #ifdef WOLFKM_DEBUG_SHA
+    pr_info("info: exiting km_hmac_digest: err %d, len %d\n", ret, len);
+    #endif /* WOLFKM_DEBUG_SHA */
+
     if (ret != 0)
         return ret;
     return km_hmac_finup(desc, data, len, out);
