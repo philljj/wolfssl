@@ -333,6 +333,12 @@ static int km_dh_decode_secret(const u8 * buf, unsigned int len,
     expected_len = DH_KPP_SECRET_MIN_SIZE + params->key_size + params->p_size
                  + params->g_size;
 
+    #ifdef WOLFKM_DEBUG_DH
+    pr_info("%s: km_dh_decode_secret: min len %zu, key len %d, p len %d, "
+            "g len %d\n", WOLFKM_DH_DRIVER, DH_KPP_SECRET_MIN_SIZE,
+            params->key_size, params->p_size, params->g_size);
+    #endif /* WOLFKM_DEBUG_DH */
+
     if (secret.len != expected_len) {
         #ifdef WOLFKM_DEBUG_DH
         pr_err("%s: km_dh_decode_secret: got %d, expected %zu",
