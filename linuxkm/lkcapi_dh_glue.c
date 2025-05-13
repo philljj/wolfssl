@@ -341,8 +341,8 @@ static int km_dh_decode_secret(const u8 * buf, unsigned int len,
 
     if (secret.len != expected_len) {
         #ifdef WOLFKM_DEBUG_DH
-        pr_err("%s: km_dh_decode_secret: got %d, expected %zu",
-               WOLFKM_DH_DRIVER, secret.len, expected_len);
+        pr_err("%s: km_dh_decode_secret: got %d, expected %zu, buf len %d",
+               WOLFKM_DH_DRIVER, secret.len, expected_len, len);
         #endif /* WOLFKM_DEBUG_DH */
         return -EINVAL;
     }
