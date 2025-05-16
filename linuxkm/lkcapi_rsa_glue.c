@@ -71,46 +71,58 @@
     #define LINUXKM_DIRECT_RSA
 #endif /* WC_RSA_NO_PADDING */
 
+/* The pkcs1(<rsa>, <hash>) sign/verify driver was renamed from "pkcs1pad" to
+ * just "pkcs1" in 6.13.
+ *
+ * The original "pkcs1pad" akcipher remained, but without hash-algs, and
+ * without sign/verify support.
+ * */
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    #define PKCS1_NAME "pkcs1pad"
+#else
+    #define PKCS1_NAME "pkcs1"
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
+
 #include <wolfssl/wolfcrypt/asn.h>
 #include <wolfssl/wolfcrypt/rsa.h>
 
 #define WOLFKM_RSA_NAME      ("rsa")
 #define WOLFKM_RSA_DRIVER    ("rsa" WOLFKM_DRIVER_FIPS "-wolfcrypt")
 
-#define WOLFKM_PKCS1_SHA224_NAME   ("pkcs1pad(rsa,sha224)")
-#define WOLFKM_PKCS1_SHA224_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA224_NAME   (PKCS1_NAME "(rsa,sha224)")
+#define WOLFKM_PKCS1_SHA224_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                     "-wolfcrypt,sha224)")
 
-#define WOLFKM_PKCS1_SHA256_NAME   ("pkcs1pad(rsa,sha256)")
-#define WOLFKM_PKCS1_SHA256_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA256_NAME   (PKCS1_NAME "(rsa,sha256)")
+#define WOLFKM_PKCS1_SHA256_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                     "-wolfcrypt,sha256)")
 
-#define WOLFKM_PKCS1_SHA384_NAME   ("pkcs1pad(rsa,sha384)")
-#define WOLFKM_PKCS1_SHA384_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA384_NAME   (PKCS1_NAME "(rsa,sha384)")
+#define WOLFKM_PKCS1_SHA384_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                     "-wolfcrypt,sha384)")
 
-#define WOLFKM_PKCS1_SHA512_NAME   ("pkcs1pad(rsa,sha512)")
-#define WOLFKM_PKCS1_SHA512_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA512_NAME   (PKCS1_NAME "(rsa,sha512)")
+#define WOLFKM_PKCS1_SHA512_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                     "-wolfcrypt,sha512)")
 
-#define WOLFKM_PKCS1_SHA3_256_NAME   ("pkcs1pad(rsa,sha3-256)")
-#define WOLFKM_PKCS1_SHA3_256_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA3_256_NAME   (PKCS1_NAME "(rsa,sha3-256)")
+#define WOLFKM_PKCS1_SHA3_256_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                       "-wolfcrypt,sha3-256)")
 
-#define WOLFKM_PKCS1_SHA3_384_NAME   ("pkcs1pad(rsa,sha3-384)")
-#define WOLFKM_PKCS1_SHA3_384_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA3_384_NAME   (PKCS1_NAME "(rsa,sha3-384)")
+#define WOLFKM_PKCS1_SHA3_384_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                       "-wolfcrypt,sha3-384)")
 
-#define WOLFKM_PKCS1_SHA3_512_NAME   ("pkcs1pad(rsa,sha3-512)")
-#define WOLFKM_PKCS1_SHA3_512_DRIVER ("pkcs1pad(rsa" WOLFKM_DRIVER_FIPS \
+#define WOLFKM_PKCS1_SHA3_512_NAME   (PKCS1_NAME "(rsa,sha3-512)")
+#define WOLFKM_PKCS1_SHA3_512_DRIVER (PKCS1_NAME "(rsa" WOLFKM_DRIVER_FIPS \
                                       "-wolfcrypt,sha3-512)")
 
 #if defined(WOLFSSL_KEY_GEN)
     #if defined(LINUXKM_DIRECT_RSA)
         static int  linuxkm_test_rsa_driver(const char * driver, int nbits);
     #endif /* LINUXKM_DIRECT_RSA */
-    static int  linuxkm_test_pkcs1_driver(const char * driver, int nbits,
-                                          int hash_oid, word32 hash_len);
+    static int  linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
+                                             int hash_oid, word32 hash_len);
 #endif /* WOLFSSL_KEY_GEN */
 
 #if defined(LINUXKM_DIRECT_RSA)
@@ -1254,32 +1266,29 @@ static int linuxkm_test_pkcs1_hash(const char * wc_driver,
 {
     int rc = 0;
 
-    rc = linuxkm_test_pkcs1_driver(wc_driver, 2048,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 2048, hash_oid, hash_len);
     if (rc) { return rc; }
 
     #ifdef WOLFKM_DEBUG_RSA
     /* repeat with additional key lengths */
-    rc = linuxkm_test_pkcs1_driver(wc_driver, 3072,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 3072, hash_oid, hash_len);
     if (rc) { return rc; }
 
-    rc = linuxkm_test_pkcs1_driver(wc_driver, 4096,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 4096, hash_oid, hash_len);
     if (rc) { return rc; }
 
     #ifdef WOLFKM_DEBUG_RSA_GENERIC
     /* repeat tests against stock linux rsa-generic pkcs1pad. */
-    rc = linuxkm_test_pkcs1_driver(generic_driver, 2048,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(generic_driver, 2048,
+                                      hash_oid, hash_len);
     if (rc) { return rc; }
 
-    rc = linuxkm_test_pkcs1_driver(generic_driver, 3072,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(generic_driver, 3072,
+                                      hash_oid, hash_len);
     if (rc) { return rc; }
 
-    rc = linuxkm_test_pkcs1_driver(generic_driver, 4096,
-                                   hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(generic_driver, 4096,
+                                      hash_oid, hash_len);
     if (rc) { return rc; }
     #endif /* WOLFKM_DEBUG_RSA_GENERIC */
     #endif /* WOLFKM_DEBUG_RSA */
@@ -1297,7 +1306,7 @@ static int linuxkm_test_pkcs1_sha224(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA224_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha224)",
+                                 PKCS1_NAME "(rsa-generic,sha224)",
                                  SHA224h, WC_SHA224_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1312,7 +1321,7 @@ static int linuxkm_test_pkcs1_sha256(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA256_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha256)",
+                                 PKCS1_NAME "(rsa-generic,sha256)",
                                  SHA256h, WC_SHA256_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1327,7 +1336,7 @@ static int linuxkm_test_pkcs1_sha384(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA384_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha384)",
+                                 PKCS1_NAME "(rsa-generic,sha384)",
                                  SHA384h, WC_SHA384_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1342,7 +1351,7 @@ static int linuxkm_test_pkcs1_sha512(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA512_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha512)",
+                                 PKCS1_NAME "(rsa-generic,sha512)",
                                  SHA512h, WC_SHA512_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1357,7 +1366,7 @@ static int linuxkm_test_pkcs1_sha3_256(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA3_256_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha3-256)",
+                                 PKCS1_NAME "(rsa-generic,sha3-256)",
                                  SHA3_256h, WC_SHA3_256_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1370,7 +1379,7 @@ static int linuxkm_test_pkcs1_sha3_384(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA3_384_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha3-384)",
+                                 PKCS1_NAME "(rsa-generic,sha3-384)",
                                  SHA3_384h, WC_SHA3_384_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1383,7 +1392,7 @@ static int linuxkm_test_pkcs1_sha3_512(void)
 
     #if defined(WOLFSSL_KEY_GEN)
     rc = linuxkm_test_pkcs1_hash(WOLFKM_PKCS1_SHA3_512_DRIVER,
-                                 "pkcs1pad(rsa-generic,sha3-512)",
+                                 PKCS1_NAME "(rsa-generic,sha3-512)",
                                  SHA3_512h, WC_SHA3_512_DIGEST_SIZE);
     #endif /* WOLFSSL_KEY_GEN */
 
@@ -1719,8 +1728,8 @@ test_rsa_end:
 
 #if (!defined(NO_SHA256) || defined(WOLFSSL_SHA512)) && \
     defined(WOLFSSL_KEY_GEN)
-static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
-                                     int hash_oid, word32 hash_len)
+static int linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
+                                        int hash_oid, word32 hash_len)
 {
     int                       test_rc = WC_NO_ERR_TRACE(WC_FAILURE);
     int                       ret = 0;
