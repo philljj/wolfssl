@@ -1742,22 +1742,27 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         0x66,0x6f,0x72,0x20,0x61,0x6c,0x6c,0x20,
         0x67,0x6f,0x6f,0x64,0x20,0x6d,0x65,0x6e
     };
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     byte *                    hash = NULL;
     byte *                    sig = NULL;
     byte *                    km_sig = NULL;
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     byte *                    dec = NULL;
     byte *                    enc = NULL;
     byte *                    dec2 = NULL;
     byte *                    enc2 = NULL;
     word32                    key_len = 0;
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     word32                    sig_len = 0;
     word32                    enc_len = 0;
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     struct scatterlist        src, dst;
     #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     struct scatterlist        src_tab[2];
     #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     int                       n_diff = 0;
 
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     hash = malloc(hash_len);
     if (! hash) {
         pr_err("error: allocating hash buffer failed.\n");
@@ -1775,6 +1780,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         test_rc = ret;
         goto test_pkcs1_end;
     }
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     key = (RsaKey*)malloc(sizeof(RsaKey));
     if (key == NULL) {
@@ -1824,6 +1830,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         goto test_pkcs1_end;
     }
 
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     sig = (byte*)malloc(key_len);
     if (sig == NULL) {
         pr_err("error: allocating sig(%d) failed\n", key_len);
@@ -1839,6 +1846,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         goto test_pkcs1_end;
     }
     memset(km_sig, 0, key_len);
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     enc = (byte*)malloc(key_len);
     if (enc == NULL) {
@@ -1922,6 +1930,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         goto test_pkcs1_end;
     }
 
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     /**
      * Sanity test: first sign and verify with direct wolfcrypt API.
      * */
@@ -1957,6 +1966,7 @@ static int linuxkm_test_pkcs1_driver(const char * driver, int nbits,
         test_rc = BAD_FUNC_ARG;
         goto test_pkcs1_end;
     }
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     /**
      * Allocate the akcipher transform, and set up
@@ -2181,15 +2191,15 @@ test_pkcs1_end:
     if (enc) { free(enc); enc = NULL; }
     if (dec) { free(dec); dec = NULL; }
 
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     if (km_sig) { free(km_sig); km_sig = NULL; }
     if (sig) { free(sig); sig = NULL; }
+    if (hash) { free(hash); }
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     if (init_rng) { wc_FreeRng(&rng); init_rng = 0; }
     if (init_key) { wc_FreeRsaKey(key); init_key = 0; }
-
     if (key) { free(key); key = NULL; }
-
-    if (hash) { free(hash); }
 
     #ifdef WOLFKM_DEBUG_RSA
     pr_info("info: %s, %d, %d: self test returned: %d\n", driver,
