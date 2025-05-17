@@ -122,7 +122,8 @@
         static int  linuxkm_test_rsa_driver(const char * driver, int nbits);
     #endif /* LINUXKM_DIRECT_RSA */
     static int  linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
-                                             int hash_oid, word32 hash_len);
+                                             int hash_oid, word32 hash_len,
+                                             uint8_t optional);
 #endif /* WOLFSSL_KEY_GEN */
 
 #if defined(LINUXKM_DIRECT_RSA)
@@ -1266,29 +1267,31 @@ static int linuxkm_test_pkcs1_hash(const char * wc_driver,
 {
     int rc = 0;
 
-    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 2048, hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 2048, hash_oid, hash_len, 0);
     if (rc) { return rc; }
 
     #ifdef WOLFKM_DEBUG_RSA
     /* repeat with additional key lengths */
-    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 3072, hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 3072, hash_oid, hash_len, 0);
     if (rc) { return rc; }
 
-    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 4096, hash_oid, hash_len);
+    rc = linuxkm_test_pkcs1pad_driver(wc_driver, 4096, hash_oid, hash_len, 0);
     if (rc) { return rc; }
 
     #ifdef WOLFKM_DEBUG_RSA_GENERIC
-    /* repeat tests against stock linux rsa-generic pkcs1pad. */
+    /* repeat tests against stock linux rsa-generic pkcs1pad.
+     * these are optional, because not all padding variations may
+     * be available. */
     rc = linuxkm_test_pkcs1pad_driver(generic_driver, 2048,
-                                      hash_oid, hash_len);
+                                      hash_oid, hash_len, 1);
     if (rc) { return rc; }
 
     rc = linuxkm_test_pkcs1pad_driver(generic_driver, 3072,
-                                      hash_oid, hash_len);
+                                      hash_oid, hash_len, 1);
     if (rc) { return rc; }
 
     rc = linuxkm_test_pkcs1pad_driver(generic_driver, 4096,
-                                      hash_oid, hash_len);
+                                      hash_oid, hash_len, 1);
     if (rc) { return rc; }
     #endif /* WOLFKM_DEBUG_RSA_GENERIC */
     #endif /* WOLFKM_DEBUG_RSA */
@@ -1729,7 +1732,8 @@ test_rsa_end:
 #if (!defined(NO_SHA256) || defined(WOLFSSL_SHA512)) && \
     defined(WOLFSSL_KEY_GEN)
 static int linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
-                                        int hash_oid, word32 hash_len)
+                                        int hash_oid, word32 hash_len,
+                                        uint8_t optional)
 {
     int                       test_rc = WC_NO_ERR_TRACE(WC_FAILURE);
     int                       ret = 0;
@@ -1770,6 +1774,7 @@ static int linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
     struct scatterlist        src_tab[2];
     #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     int                       n_diff = 0;
+    uint8_t                   skipped = 0;
 
     #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     hash = malloc(hash_len);
@@ -1983,12 +1988,20 @@ static int linuxkm_test_pkcs1pad_driver(const char * driver, int nbits,
      * */
     tfm = crypto_alloc_akcipher(driver, 0, 0);
     if (IS_ERR(tfm)) {
-        pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
-               driver, PTR_ERR(tfm));
-        if (PTR_ERR(tfm) == -ENOMEM)
-            test_rc = MEMORY_E;
-        else
-            test_rc = BAD_FUNC_ARG;
+        if (optional) {
+            /* this cipher may not be available to test, skip. */
+            skipped = 1;
+        }
+        else {
+            pr_err("error: allocating akcipher algorithm %s failed: %ld\n",
+                   driver, PTR_ERR(tfm));
+            if (PTR_ERR(tfm) == -ENOMEM) {
+                test_rc = MEMORY_E;
+            }
+            else {
+                test_rc = BAD_FUNC_ARG;
+            }
+        }
         tfm = NULL;
         goto test_pkcs1_end;
     }
@@ -2211,8 +2224,15 @@ test_pkcs1_end:
     if (key) { free(key); key = NULL; }
 
     #ifdef WOLFKM_DEBUG_RSA
-    pr_info("info: %s, %d, %d: self test returned: %d\n", driver,
-            nbits, key_len, ret);
+    if (skipped) {
+        pr_info("info: %s, %d, %d: self test skipped\n", driver,
+                nbits, key_len);
+        test_rc = 0;
+    }
+    else {
+        pr_info("info: %s, %d, %d: self test returned: %d\n", driver,
+                nbits, key_len, ret);
+    }
     #endif /* WOLFKM_DEBUG_RSA */
 
     return test_rc;
