@@ -749,6 +749,7 @@ static int linuxkm_test_ecdsa_nist_p521(void)
 }
 #endif /* HAVE_ECC521 */
 
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
 static int linuxkm_test_ecdsa_nist_driver(const char * driver,
                                           const byte * pub, word32 pub_len,
                                           const byte * sig, word32 sig_len,
@@ -883,5 +884,89 @@ test_ecdsa_nist_end:
 
     return test_rc;
 }
+#else
+static int linuxkm_test_ecdsa_nist_driver(const char * driver,
+                                          const byte * pub, word32 pub_len,
+                                          const byte * sig, word32 sig_len,
+                                          const byte * hash, word32 hash_len)
+{
+    int                  test_rc = WC_NO_ERR_TRACE(WC_FAILURE);
+    int                  ret = 0;
+    struct crypto_sig *  tfm = NULL;
+    byte *               bad_sig = NULL;
+
+    /*
+     * Allocate the akcipher transform, and set up
+     * the akcipher request.
+     */
+    tfm = crypto_alloc_sig(driver, 0, 0);
+    if (IS_ERR(tfm)) {
+        pr_err("error: allocating sig algorithm %s failed: %ld\n",
+               driver, PTR_ERR(tfm));
+        if (PTR_ERR(tfm) == -ENOMEM)
+            test_rc = MEMORY_E;
+        else
+            test_rc = BAD_FUNC_ARG;
+        tfm = NULL;
+        goto test_ecdsa_nist_end;
+    }
+
+    /* now set pub key for verify test. */
+    ret = crypto_sig_set_pubkey(tfm, pub, pub_len);
+    if (ret) {
+        pr_err("error: crypto_sig_set_pubkey returned: %d\n", ret);
+        test_rc = BAD_FUNC_ARG;
+        goto test_ecdsa_nist_end;
+    }
+
+    {
+        unsigned int maxsize = crypto_sig_maxsize(tfm);
+        if ((int) maxsize <= 0) {
+            pr_err("error: crypto_sig_maxsize "
+                   "returned %d\n", maxsize);
+            test_rc = BAD_FUNC_ARG;
+            goto test_ecdsa_nist_end;
+        }
+    }
+
+    ret = crypto_sig_verify(tfm, sig, sig_len, hash, hash_len);
+    if (ret) {
+        pr_err("error: crypto_sig_verify returned: %d\n", ret);
+        test_rc = BAD_FUNC_ARG;
+        goto test_ecdsa_nist_end;
+    }
+
+    /* prepare a bad signature */
+    bad_sig = malloc(sig_len);
+    if (bad_sig == NULL) {
+        pr_err("error: alloc sig failed\n");
+        test_rc = MEMORY_E;
+        goto test_ecdsa_nist_end;
+    }
+
+    memcpy(bad_sig, sig, sig_len);
+    bad_sig[sig_len/2] ^= 1;
+
+    /* it should fail */
+    ret = crypto_sig_verify(tfm, bad_sig, sig_len, hash, hash_len);
+    if (ret != -EBADMSG) {
+        pr_err("error: crypto_sig_verify returned %d, expected %d\n",
+               ret, -EBADMSG);
+        test_rc = BAD_FUNC_ARG;
+        goto test_ecdsa_nist_end;
+    }
+
+    test_rc = 0;
+test_ecdsa_nist_end:
+    if (tfm) { crypto_free_sig(tfm); tfm = NULL; }
+    if (bad_sig) { free(bad_sig); bad_sig = NULL; }
+
+    #ifdef WOLFKM_DEBUG_ECDSA
+    pr_info("info: %s: self test returned: %d\n", driver, test_rc);
+    #endif /* WOLFKM_DEBUG_ECDSA */
+
+    return test_rc;
+}
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 #endif /* LINUXKM_LKCAPI_REGISTER_ECDSA */
