@@ -223,7 +223,7 @@ WC_MAYBE_UNUSED static int check_shash_driver_masking(struct crypto_shash *tfm, 
 #else
     #define tfm_type   crypto_sig
     #define tfm_ctx_cb crypto_sig_ctx
-    #define alg_type   sig_alg 
+    #define alg_type   sig_alg
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 #include "lkcapi_aes_glue.c"
