@@ -81,6 +81,15 @@
     #define WOLFKM_ECDSA_P521_DRIVER  ("ecdsa-nist-p521" WOLFKM_DRIVER_FIPS \
                                        "-wolfcrypt")
 #else
+    /* In 6.13 ecdsa was renamed to x962(ecdsa), and became
+     * a sig_alg. The >= 6.13 "x962(ecdsa)" sig encoding is the same
+     * as <= 6.12 "ecdsa".
+     *
+     * A new "ecdsa" sig_alg was introduced with the same previous
+     * name, but a different encoding.
+     *
+     * Also "p1363(ecdsa)" was introduced, with a slightly different
+     * encoding than "x962(ecdsa)". */
     #define WOLFKM_ECDSA_P192_NAME    ("x962(ecdsa-nist-p192)")
     #define WOLFKM_ECDSA_P192_DRIVER  ("x962(ecdsa-nist-p192" \
                                        WOLFKM_DRIVER_FIPS "-wolfcrypt)")
@@ -96,6 +105,23 @@
     #define WOLFKM_ECDSA_P521_NAME    ("x962(ecdsa-nist-p521)")
     #define WOLFKM_ECDSA_P521_DRIVER  ("x962(ecdsa-nist-p521" \
                                        WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    /* p1363 */
+    #define WOLFKM_P1363_ECDSA_P192_NAME    ("p1363(ecdsa-nist-p192)")
+    #define WOLFKM_P1363_ECDSA_P192_DRIVER  ("p1363(ecdsa-nist-p192" \
+                                             WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    #define WOLFKM_P1363_ECDSA_P256_NAME    ("p1363(ecdsa-nist-p256)")
+    #define WOLFKM_P1363_ECDSA_P256_DRIVER  ("p1363(ecdsa-nist-p256" \
+                                             WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    #define WOLFKM_P1363_ECDSA_P384_NAME    ("p1363(ecdsa-nist-p384)")
+    #define WOLFKM_P1363_ECDSA_P384_DRIVER  ("p1363(ecdsa-nist-p384" \
+                                             WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    #define WOLFKM_P1363_ECDSA_P521_NAME    ("p1363(ecdsa-nist-p521)")
+    #define WOLFKM_P1363_ECDSA_P521_DRIVER  ("p1363(ecdsa-nist-p521" \
+                                             WOLFKM_DRIVER_FIPS "-wolfcrypt)")
 #endif /* !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY) */
 
 static int  linuxkm_test_ecdsa_nist_driver(const char * driver,
@@ -112,6 +138,17 @@ static int ecdsa_nist_p384_loaded = 0;
 static int ecdsa_nist_p521_loaded = 0;
 #endif /* HAVE_ECC521 */
 
+#if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    #if defined(LINUXKM_ECC192)
+    static int p1363_ecdsa_nist_p192_loaded = 0;
+    #endif /* LINUXKM_ECC192 */
+    static int p1363_ecdsa_nist_p256_loaded = 0;
+    static int p1363_ecdsa_nist_p384_loaded = 0;
+    #if defined(HAVE_ECC521)
+    static int p1363_ecdsa_nist_p521_loaded = 0;
+    #endif /* HAVE_ECC521 */
+#endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
+
 struct km_ecdsa_ctx {
     ecc_key *    key;
     int          curve_id;
@@ -124,11 +161,15 @@ static int          km_ecdsa_set_pub(struct tfm_type *tfm,
                                      const void *key, unsigned int keylen);
 static unsigned int km_ecdsa_max_size(struct tfm_type *tfm);
 #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
-static int          km_ecdsa_verify(struct akcipher_request *req);
+static int          km_x962_ecdsa_verify(struct akcipher_request *req);
 #else
-static int          km_ecdsa_verify(struct crypto_sig *tfm,
+static int          km_x962_ecdsa_verify(struct crypto_sig *tfm,
                                     const void *src, unsigned int slen,
                                     const void *digest, unsigned int dlen);
+static int          km_p1363_ecdsa_verify(struct crypto_sig *tfm,
+                                          const void *src, unsigned int slen,
+                                          const void *digest,
+                                          unsigned int dlen);
 static unsigned int km_ecdsa_key_size(struct tfm_type *tfm);
 static unsigned int km_ecdsa_digest_size(struct tfm_type *tfm);
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
@@ -150,7 +191,7 @@ static struct alg_type ecdsa_nist_p192 = {
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
-    .verify               = km_ecdsa_verify,
+    .verify               = km_x962_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
@@ -168,7 +209,7 @@ static struct alg_type ecdsa_nist_p256 = {
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
-    .verify               = km_ecdsa_verify,
+    .verify               = km_x962_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
@@ -185,7 +226,7 @@ static struct alg_type ecdsa_nist_p384 = {
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
-    .verify               = km_ecdsa_verify,
+    .verify               = km_x962_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
@@ -203,7 +244,7 @@ static struct alg_type ecdsa_nist_p521 = {
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
     .base.cra_module      = THIS_MODULE,
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
-    .verify               = km_ecdsa_verify,
+    .verify               = km_x962_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
@@ -214,6 +255,78 @@ static struct alg_type ecdsa_nist_p521 = {
     .exit                 = km_ecdsa_exit,
 };
 #endif /* HAVE_ECC521 */
+
+#if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    /* p1363 is the same as x962, but with a different encoding
+     * for the signature.
+     *
+     * - in x962 the r and s are wrapped with ASN.1.
+     * - in p1363 the r and s are not wrapped.
+     *   */
+    #if defined(LINUXKM_ECC192)
+    static struct alg_type p1363_ecdsa_nist_p192 = {
+        .base.cra_name        = WOLFKM_P1363_ECDSA_P192_NAME,
+        .base.cra_driver_name = WOLFKM_P1363_ECDSA_P192_DRIVER,
+        .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+        .base.cra_module      = THIS_MODULE,
+        .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
+        .verify               = km_p1363_ecdsa_verify,
+        .set_pub_key          = km_ecdsa_set_pub,
+        .key_size             = km_ecdsa_key_size,
+        .digest_size          = km_ecdsa_digest_size,
+        .max_size             = km_ecdsa_max_size,
+        .init                 = km_ecdsa_nist_p192_init,
+        .exit                 = km_ecdsa_exit,
+    };
+    #endif /* LINUXKM_ECC192 */
+
+    static struct alg_type p1363_ecdsa_nist_p256 = {
+        .base.cra_name        = WOLFKM_P1363_ECDSA_P256_NAME,
+        .base.cra_driver_name = WOLFKM_P1363_ECDSA_P256_DRIVER,
+        .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+        .base.cra_module      = THIS_MODULE,
+        .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
+        .verify               = km_p1363_ecdsa_verify,
+        .set_pub_key          = km_ecdsa_set_pub,
+        .key_size             = km_ecdsa_key_size,
+        .digest_size          = km_ecdsa_digest_size,
+        .max_size             = km_ecdsa_max_size,
+        .init                 = km_ecdsa_nist_p256_init,
+        .exit                 = km_ecdsa_exit,
+    };
+
+    static struct alg_type p1363_ecdsa_nist_p384 = {
+        .base.cra_name        = WOLFKM_P1363_ECDSA_P384_NAME,
+        .base.cra_driver_name = WOLFKM_P1363_ECDSA_P384_DRIVER,
+        .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+        .base.cra_module      = THIS_MODULE,
+        .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
+        .verify               = km_p1363_ecdsa_verify,
+        .set_pub_key          = km_ecdsa_set_pub,
+        .key_size             = km_ecdsa_key_size,
+        .digest_size          = km_ecdsa_digest_size,
+        .max_size             = km_ecdsa_max_size,
+        .init                 = km_ecdsa_nist_p384_init,
+        .exit                 = km_ecdsa_exit,
+    };
+
+    #if defined(HAVE_ECC521)
+    static struct alg_type p1363_ecdsa_nist_p521 = {
+        .base.cra_name        = WOLFKM_P1363_ECDSA_P521_NAME,
+        .base.cra_driver_name = WOLFKM_P1363_ECDSA_P521_DRIVER,
+        .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
+        .base.cra_module      = THIS_MODULE,
+        .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
+        .verify               = km_p1363_ecdsa_verify,
+        .set_pub_key          = km_ecdsa_set_pub,
+        .key_size             = km_ecdsa_key_size,
+        .digest_size          = km_ecdsa_digest_size,
+        .max_size             = km_ecdsa_max_size,
+        .init                 = km_ecdsa_nist_p521_init,
+        .exit                 = km_ecdsa_exit,
+    };
+    #endif /* HAVE_ECC521 */
+#endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 /**
  * Decodes and sets the ECDSA pub key.
@@ -444,7 +557,7 @@ static int km_ecdsa_nist_p521_init(struct tfm_type *tfm)
  * See kernel:
  *   - include/crypto/akcipher.h
  */
-static int km_ecdsa_verify(struct akcipher_request *req)
+static int km_x962_ecdsa_verify(struct akcipher_request *req)
 {
     struct crypto_akcipher * tfm = NULL;
     struct km_ecdsa_ctx *    ctx = NULL;
@@ -512,7 +625,7 @@ ecdsa_verify_end:
     if (sig != NULL) { free(sig); sig = NULL; }
 
     #ifdef WOLFKM_DEBUG_ECDSA
-    pr_info("info: exiting km_ecdsa_verify hash_len %d, sig_len %d, "
+    pr_info("info: exiting km_x962_ecdsa_verify hash_len %d, sig_len %d, "
             "err %d, result %d\n", hash_len, sig_len, err, result);
     #endif /* WOLFKM_DEBUG_ECDSA */
     return err;
@@ -532,9 +645,9 @@ ecdsa_verify_end:
  * See kernel (6.13 or later):
  *   - include/crypto/sig.h
  */
-static int km_ecdsa_verify(struct crypto_sig *tfm,
-                           const void *src, unsigned int slen,
-                           const void *digest, unsigned int dlen)
+static int km_x962_ecdsa_verify(struct crypto_sig *tfm,
+                                const void *src, unsigned int slen,
+                                const void *digest, unsigned int dlen)
 {
     struct km_ecdsa_ctx *    ctx = NULL;
     int                      result = -1;
@@ -573,11 +686,95 @@ static int km_ecdsa_verify(struct crypto_sig *tfm,
 
 ecdsa_verify_end:
     #ifdef WOLFKM_DEBUG_ECDSA
-    pr_info("info: exiting km_ecdsa_verify hash_len %d, sig_len %d, "
+    pr_info("info: exiting km_x962_ecdsa_verify hash_len %d, sig_len %d, "
             "err %d, result %d\n", dlen, slen, err, result);
     #endif /* WOLFKM_DEBUG_ECDSA */
     return err;
 }
+
+/*
+ * Verify a p1363 ecdsa_nist signature.
+ *
+ * src:
+ *   - src contains the raw r + s concatenated signature.
+ *   - slen must == (curve_len << 1)
+ *
+ * digest:
+ *   - the digest that was encoded, padded, and signed previously.
+ *   - dlen must be the correct digest len.
+ *
+ * See kernel (6.13 or later):
+ *   - include/crypto/sig.h
+ */
+static int km_p1363_ecdsa_verify(struct crypto_sig *tfm,
+                                 const void *src_v, unsigned int slen,
+                                 const void *digest, unsigned int dlen)
+{
+    struct km_ecdsa_ctx *    ctx = NULL;
+    int                      result = -1;
+    int                      err = -1;
+    const byte *             src = (const byte *)src_v;
+    byte *                   asn_sig = NULL;
+    word32                   asn_sig_len = 0;
+
+    if (src == NULL || digest == NULL) {
+        return -EINVAL;
+    }
+
+    ctx = crypto_sig_ctx(tfm);
+
+    if (slen <= 0 || dlen <= 0) {
+        err = -EINVAL;
+        goto ecdsa_verify_end;
+    }
+
+    asn_sig_len = (slen << 1);
+    asn_sig = malloc(asn_sig_len);
+    if (!asn_sig) {
+        err = -ENOMEM;
+        goto ecdsa_verify_end;
+    }
+    err = wc_ecc_rs_raw_to_sig(src, ctx->curve_len, src + ctx->curve_len,
+                               ctx->curve_len, asn_sig, &asn_sig_len);
+    if (err != MP_OKAY) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("error: %s: ecdsa verify: rs_raw_to_sig returned: %d\n",
+               WOLFKM_ECDSA_DRIVER, err);
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EINVAL;
+        goto ecdsa_verify_end;
+    }
+
+    err = wc_ecc_verify_hash(asn_sig, asn_sig_len, digest, dlen, &result,
+                             ctx->key);
+
+    if (err) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("error: %s: ecdsa verify: verify_hash returned: %d\n",
+               WOLFKM_ECDSA_DRIVER, err);
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EBADMSG;
+        goto ecdsa_verify_end;
+    }
+
+    if (result != 1) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("info: %s: ecdsa verify: verify fail: %d\n",
+               WOLFKM_ECDSA_DRIVER, result);
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EBADMSG;
+        goto ecdsa_verify_end;
+    }
+
+ecdsa_verify_end:
+    if (asn_sig) { free(asn_sig); asn_sig = NULL; }
+    #ifdef WOLFKM_DEBUG_ECDSA
+    pr_info("info: exiting km_p1363_ecdsa_verify hash_len %d, sig_len %d, "
+            "err %d, result %d\n", dlen, slen, err, result);
+    #endif /* WOLFKM_DEBUG_ECDSA */
+    return err;
+}
+
 
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
@@ -825,6 +1022,256 @@ static int linuxkm_test_ecdsa_nist_p521(void)
 
 }
 #endif /* HAVE_ECC521 */
+
+
+
+#if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    #if defined(LINUXKM_ECC192)
+    static int linuxkm_test_p1363_ecdsa_nist_p192(void)
+    {
+        int rc = 0;
+        /* reference value from kernel crypto/testmgr.h
+         * OID_id_ecdsa_with_sha256 */
+        /* 49 byte pub key */
+        static const byte p192_pub[] = {
+            0x04, 0xe2, 0x51, 0x24, 0x9b, 0xf7, 0xb6, 0x32,
+            0x82, 0x39, 0x66, 0x3d, 0x5b, 0xec, 0x3b, 0xae,
+            0x0c, 0xd5, 0xf2, 0x67, 0xd1, 0xc7, 0xe1, 0x02,
+            0xe4, 0xbf, 0x90, 0x62, 0xb8, 0x55, 0x75, 0x56,
+            0x69, 0x20, 0x5e, 0xcb, 0x4e, 0xca, 0x33, 0xd6,
+            0xcb, 0x62, 0x6b, 0x94, 0xa9, 0xa2, 0xe9, 0x58,
+            0x91
+        };
+
+        /* 32 byte hash */
+        static const byte hash[] = {
+            0x35, 0xec, 0xa1, 0xa0, 0x9e, 0x14, 0xde, 0x33,
+            0x03, 0xb6, 0xf6, 0xbd, 0x0c, 0x2f, 0xb2, 0xfd,
+            0x1f, 0x27, 0x82, 0xa5, 0xd7, 0x70, 0x3f, 0xef,
+            0xa0, 0x82, 0x69, 0x8e, 0x73, 0x31, 0x8e, 0xd7
+        };
+
+        /* 55 byte sig */
+        static const byte sig[] = {
+            0x30, 0x35, 0x02, 0x18, 0x3f, 0x72, 0x3f, 0x1f,
+            0x42, 0xd2, 0x3f, 0x1d, 0x6b, 0x1a, 0x58, 0x56,
+            0xf1, 0x8f, 0xf7, 0xfd, 0x01, 0x48, 0xfb, 0x5f,
+            0x72, 0x2a, 0xd4, 0x8f, 0x02, 0x19, 0x00, 0xb3,
+            0x69, 0x43, 0xfd, 0x48, 0x19, 0x86, 0xcf, 0x32,
+            0xdd, 0x41, 0x74, 0x6a, 0x51, 0xc7, 0xd9, 0x7d,
+            0x3a, 0x97, 0xd9, 0xcd, 0x1a, 0x6a, 0x49
+        };
+        word32     pub_len = 0;
+        word32     sig_len = 0;
+        word32     hash_len = 0;
+
+        pub_len = sizeof(p192_pub);
+        hash_len = sizeof(hash);
+        sig_len = sizeof(sig);
+
+        rc = linuxkm_test_ecdsa_nist_driver(WOLFKM_P1363_ECDSA_P192_DRIVER,
+                                            p192_pub, pub_len,
+                                            sig, sig_len,
+                                            hash, hash_len);
+
+        return rc;
+    }
+    #endif /* LINUXKM_ECC192 */
+
+    static int linuxkm_test_p1363_ecdsa_nist_p256(void)
+    {
+        int rc = 0;
+        /* reference value from kernel crypto/testmgr.h
+         * OID_id_ecdsa_with_sha256 */
+        /* 65 byte pub key */
+        static const byte p256_pub[] = {
+            0x04, 0xf1, 0xea, 0xc4, 0x53, 0xf3, 0xb9, 0x0e,
+            0x9f, 0x7e, 0xad, 0xe3, 0xea, 0xd7, 0x0e, 0x0f,
+            0xd6, 0x98, 0x9a, 0xca, 0x92, 0x4d, 0x0a, 0x80,
+            0xdb, 0x2d, 0x45, 0xc7, 0xec, 0x4b, 0x97, 0x00,
+            0x2f, 0xe9, 0x42, 0x6c, 0x29, 0xdc, 0x55, 0x0e,
+            0x0b, 0x53, 0x12, 0x9b, 0x2b, 0xad, 0x2c, 0xe9,
+            0x80, 0xe6, 0xc5, 0x43, 0xc2, 0x1d, 0x5e, 0xbb,
+            0x65, 0x21, 0x50, 0xb6, 0x37, 0xb0, 0x03, 0x8e,
+            0xb8
+        };
+
+        /* 32 byte hash */
+        static const byte hash[] = {
+            0x8f, 0x43, 0x43, 0x46, 0x64, 0x8f, 0x6b, 0x96,
+            0xdf, 0x89, 0xdd, 0xa9, 0x01, 0xc5, 0x17, 0x6b,
+            0x10, 0xa6, 0xd8, 0x39, 0x61, 0xdd, 0x3c, 0x1a,
+            0xc8, 0x8b, 0x59, 0xb2, 0xdc, 0x32, 0x7a, 0xa4
+        };
+
+        /* 64 byte sig */
+        static const byte sig[] = {
+            0x08, 0x31, 0xfa, 0x74, 0x0d, 0x1d, 0x21, 0x5d,
+            0x09, 0xdc, 0x29, 0x63, 0xa8, 0x1a, 0xad, 0xfc,
+            0xac, 0x44, 0xc3, 0xe8, 0x24, 0x11, 0x2d, 0xa4,
+            0x91, 0xdc, 0x02, 0x67, 0xdc, 0x0c, 0xd0, 0x82,
+            0xbd, 0xff, 0xce, 0xee, 0x42, 0xc3, 0x97, 0xff,
+            0xf9, 0xa9, 0x81, 0xac, 0x4a, 0x50, 0xd0, 0x91,
+            0x0a, 0x6e, 0x1b, 0xc4, 0xaf, 0xe1, 0x83, 0xc3,
+            0x4f, 0x2a, 0x65, 0x35, 0x23, 0xe3, 0x1d, 0xfa
+        };
+        word32     pub_len = 0;
+        word32     sig_len = 0;
+        word32     hash_len = 0;
+
+        pub_len = sizeof(p256_pub);
+        hash_len = sizeof(hash);
+        sig_len = sizeof(sig);
+
+        rc = linuxkm_test_ecdsa_nist_driver(WOLFKM_P1363_ECDSA_P256_DRIVER,
+                                            p256_pub, pub_len,
+                                            sig, sig_len,
+                                            hash, hash_len);
+        return rc;
+    }
+
+    static int linuxkm_test_p1363_ecdsa_nist_p384(void)
+    {
+        int rc = 0;
+        /* reference value from kernel crypto/testmgr.h
+         * OID_id_ecdsa_with_sha384 */
+        /* 97 byte pub key */
+        static const byte p384_pub[] = {
+            0x04, 0x3a, 0x2f, 0x62, 0xe7, 0x1a, 0xcf, 0x24,
+            0xd0, 0x0b, 0x7c, 0xe0, 0xed, 0x46, 0x0a, 0x4f,
+            0x74, 0x16, 0x43, 0xe9, 0x1a, 0x25, 0x7c, 0x55,
+            0xff, 0xf0, 0x29, 0x68, 0x66, 0x20, 0x91, 0xf9,
+            0xdb, 0x2b, 0xf6, 0xb3, 0x6c, 0x54, 0x01, 0xca,
+            0xc7, 0x6a, 0x5c, 0x0d, 0xeb, 0x68, 0xd9, 0x3c,
+            0xf1, 0x01, 0x74, 0x1f, 0xf9, 0x6c, 0xe5, 0x5b,
+            0x60, 0xe9, 0x7f, 0x5d, 0xb3, 0x12, 0x80, 0x2a,
+            0xd8, 0x67, 0x92, 0xc9, 0x0e, 0x4c, 0x4c, 0x6b,
+            0xa1, 0xb2, 0xa8, 0x1e, 0xac, 0x1c, 0x97, 0xd9,
+            0x21, 0x67, 0xe5, 0x1b, 0x5a, 0x52, 0x31, 0x68,
+            0xd6, 0xee, 0xf0, 0x19, 0xb0, 0x55, 0xed, 0x89,
+            0x9e
+        };
+
+        /* 48 byte hash */
+        static const byte hash[] = {
+            0x8d, 0xf2, 0xc0, 0xe9, 0xa8, 0xf3, 0x8e, 0x44,
+            0xc4, 0x8c, 0x1a, 0xa0, 0xb8, 0xd7, 0x17, 0xdf,
+            0xf2, 0x37, 0x1b, 0xc6, 0xe3, 0xf5, 0x62, 0xcc,
+            0x68, 0xf5, 0xd5, 0x0b, 0xbf, 0x73, 0x2b, 0xb1,
+            0xb0, 0x4c, 0x04, 0x00, 0x31, 0xab, 0xfe, 0xc8,
+            0xd6, 0x09, 0xc8, 0xf2, 0xea, 0xd3, 0x28, 0xff
+        };
+
+        /* 104 byte sig */
+        static const byte sig[] = {
+            0x30, 0x66, 0x02, 0x31, 0x00, 0x9b, 0x28, 0x68,
+            0xc0, 0xa1, 0xea, 0x8c, 0x50, 0xee, 0x2e, 0x62,
+            0x35, 0x46, 0xfa, 0x00, 0xd8, 0x2d, 0x7a, 0x91,
+            0x5f, 0x49, 0x2d, 0x22, 0x08, 0x29, 0xe6, 0xfb,
+            0xca, 0x8c, 0xd6, 0xb6, 0xb4, 0x3b, 0x1f, 0x07,
+            0x8f, 0x15, 0x02, 0xfe, 0x1d, 0xa2, 0xa4, 0xc8,
+            0xf2, 0xea, 0x9d, 0x11, 0x1f, 0x02, 0x31, 0x00,
+            0xfc, 0x50, 0xf6, 0x43, 0xbd, 0x50, 0x82, 0x0e,
+            0xbf, 0xe3, 0x75, 0x24, 0x49, 0xac, 0xfb, 0xc8,
+            0x71, 0xcd, 0x8f, 0x18, 0x99, 0xf0, 0x0f, 0x13,
+            0x44, 0x92, 0x8c, 0x86, 0x99, 0x65, 0xb3, 0x97,
+            0x96, 0x17, 0x04, 0xc9, 0x05, 0x77, 0xf1, 0x8e,
+            0xab, 0x8d, 0x4e, 0xde, 0xe6, 0x6d, 0x9b, 0x66
+        };
+        word32     pub_len = 0;
+        word32     sig_len = 0;
+        word32     hash_len = 0;
+
+        pub_len = sizeof(p384_pub);
+        hash_len = sizeof(hash);
+        sig_len = sizeof(sig);
+
+        rc = linuxkm_test_ecdsa_nist_driver(WOLFKM_P1363_ECDSA_P384_DRIVER,
+                                            p384_pub, pub_len,
+                                            sig, sig_len,
+                                            hash, hash_len);
+        return rc;
+    }
+
+    #if defined(HAVE_ECC521)
+    static int linuxkm_test_p1363_ecdsa_nist_p521(void)
+    {
+        int rc = 0;
+        /* reference value from kernel crypto/testmgr.h
+         * OID_id_ecdsa_with_sha521 */
+        /* 133 byte pub key */
+        static const byte p521_pub[] = {
+            0x04, 0x00, 0xc7, 0x65, 0xee, 0x0b, 0x86, 0x7d,
+            0x8f, 0x02, 0xf1, 0x74, 0x5b, 0xb0, 0x4c, 0x3f,
+            0xa6, 0x35, 0x60, 0x9f, 0x55, 0x23, 0x11, 0xcc,
+            0xdf, 0xb8, 0x42, 0x99, 0xee, 0x6c, 0x96, 0x6a,
+            0x27, 0xa2, 0x56, 0xb2, 0x2b, 0x03, 0xad, 0x0f,
+            0xe7, 0x97, 0xde, 0x09, 0x5d, 0xb4, 0xc5, 0x5f,
+            0xbd, 0x87, 0x37, 0xbf, 0x5a, 0x16, 0x35, 0x56,
+            0x08, 0xfd, 0x6f, 0x06, 0x1a, 0x1c, 0x84, 0xee,
+            0xc3, 0x64, 0xb3, 0x00, 0x9e, 0xbd, 0x6e, 0x60,
+            0x76, 0xee, 0x69, 0xfd, 0x3a, 0xb8, 0xcd, 0x7e,
+            0x91, 0x68, 0x53, 0x57, 0x44, 0x13, 0x2e, 0x77,
+            0x09, 0x2a, 0xbe, 0x48, 0xbd, 0x91, 0xd8, 0xf6,
+            0x21, 0x16, 0x53, 0x99, 0xd5, 0xf0, 0x40, 0xad,
+            0xa6, 0xf8, 0x58, 0x26, 0xb6, 0x9a, 0xf8, 0x77,
+            0xfe, 0x3a, 0x05, 0x1a, 0xdb, 0xa9, 0x0f, 0xc0,
+            0x6c, 0x76, 0x30, 0x8c, 0xd8, 0xde, 0x44, 0xae,
+            0xd0, 0x17, 0xdf, 0x49, 0x6a
+        };
+
+        /* 64 byte hash */
+        static const byte hash[] = {
+            0x5c, 0xa6, 0xbc, 0x79, 0xb8, 0xa0, 0x1e, 0x11,
+            0x83, 0xf7, 0xe9, 0x05, 0xdf, 0xba, 0xf7, 0x69,
+            0x97, 0x22, 0x32, 0xe4, 0x94, 0x7c, 0x65, 0xbd,
+            0x74, 0xc6, 0x9a, 0x8b, 0xbd, 0x0d, 0xdc, 0xed,
+            0xf5, 0x9c, 0xeb, 0xe1, 0xc5, 0x68, 0x40, 0xf2,
+            0xc7, 0x04, 0xde, 0x9e, 0x0d, 0x76, 0xc5, 0xa3,
+            0xf9, 0x3c, 0x6c, 0x98, 0x08, 0x31, 0xbd, 0x39,
+            0xe8, 0x42, 0x7f, 0x80, 0x39, 0x6f, 0xfe, 0x68,
+        };
+
+        /* 139 byte sig */
+        static const byte sig[] = {
+            0x30, 0x81, 0x88, 0x02, 0x42, 0x01, 0x5c, 0x71,
+            0x86, 0x96, 0xac, 0x21, 0x33, 0x7e, 0x4e, 0xaa,
+            0x86, 0xec, 0xa8, 0x05, 0x03, 0x52, 0x56, 0x63,
+            0x0e, 0x02, 0xcc, 0x94, 0xa9, 0x05, 0xb9, 0xfb,
+            0x62, 0x1e, 0x42, 0x03, 0x6c, 0x74, 0x8a, 0x1f,
+            0x12, 0x3e, 0xb7, 0x7e, 0x51, 0xff, 0x7f, 0x27,
+            0x93, 0xe8, 0x6c, 0x49, 0x7d, 0x28, 0xfc, 0x80,
+            0xa6, 0x13, 0xfc, 0xb6, 0x90, 0xf7, 0xbb, 0x28,
+            0xb5, 0x04, 0xb0, 0xb6, 0x33, 0x1c, 0x7e, 0x02,
+            0x42, 0x01, 0x70, 0x43, 0x52, 0x1d, 0xe3, 0xc6,
+            0xbd, 0x5a, 0x40, 0x95, 0x35, 0x89, 0x4f, 0x41,
+            0x5f, 0x9e, 0x19, 0x88, 0x05, 0x3e, 0x43, 0x39,
+            0x01, 0xbd, 0xb7, 0x7a, 0x76, 0x37, 0x51, 0x47,
+            0x49, 0x98, 0x12, 0x71, 0xd0, 0xe9, 0xca, 0xa7,
+            0xc0, 0xcb, 0xaa, 0x00, 0x55, 0xbb, 0x6a, 0xb4,
+            0x73, 0x00, 0xd2, 0x72, 0x74, 0x13, 0x63, 0x39,
+            0xa6, 0xe5, 0x25, 0x46, 0x1e, 0x77, 0x44, 0x78,
+            0xe0, 0xd1, 0x04
+        };
+        word32     pub_len = 0;
+        word32     sig_len = 0;
+        word32     hash_len = 0;
+
+        pub_len = sizeof(p521_pub);
+        hash_len = sizeof(hash);
+        sig_len = sizeof(sig);
+
+        rc = linuxkm_test_ecdsa_nist_driver(WOLFKM_P1363_ECDSA_P521_DRIVER,
+                                            p521_pub, pub_len,
+                                            sig, sig_len,
+                                            hash, hash_len);
+        return rc;
+
+    }
+    #endif /* HAVE_ECC521 */
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
+
+
 
 #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
 static int linuxkm_test_ecdsa_nist_driver(const char * driver,

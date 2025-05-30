@@ -522,6 +522,23 @@ static int linuxkm_lkcapi_register(void)
         REGISTER_ALG(ecdsa_nist_p521, sig,
                      linuxkm_test_ecdsa_nist_p521);
         #endif /* HAVE_ECC521 */
+
+
+        #if defined(LINUXKM_ECC192)
+        REGISTER_ALG(p1363_ecdsa_nist_p192, sig,
+                     linuxkm_test_p1363_ecdsa_nist_p192);
+        #endif /* LINUXKM_ECC192 */
+
+        REGISTER_ALG(p1363_ecdsa_nist_p256, sig,
+                     linuxkm_test_p1363_ecdsa_nist_p256);
+
+        REGISTER_ALG(p1363_ecdsa_nist_p384, sig,
+                     linuxkm_test_p1363_ecdsa_nist_p384);
+
+        #if defined(HAVE_ECC521)
+        REGISTER_ALG(p1363_ecdsa_nist_p521, sig,
+                     linuxkm_test_p1363_ecdsa_nist_p521);
+        #endif /* HAVE_ECC521 */
     #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)) &&    \
@@ -843,6 +860,15 @@ static int linuxkm_lkcapi_unregister(void)
         UNREGISTER_ALG(ecdsa_nist_p384, sig);
         #if defined(HAVE_ECC521)
             UNREGISTER_ALG(ecdsa_nist_p521, sig);
+        #endif /* HAVE_ECC521 */
+
+        #if defined(LINUXKM_ECC192)
+            UNREGISTER_ALG(p1363_ecdsa_nist_p192, sig);
+        #endif /* LINUXKM_ECC192 */
+        UNREGISTER_ALG(p1363_ecdsa_nist_p256, sig);
+        UNREGISTER_ALG(p1363_ecdsa_nist_p384, sig);
+        #if defined(HAVE_ECC521)
+            UNREGISTER_ALG(p1363_ecdsa_nist_p521, sig);
         #endif /* HAVE_ECC521 */
     #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
