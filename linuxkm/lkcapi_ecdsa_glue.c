@@ -64,22 +64,39 @@
 
 #define WOLFKM_ECDSA_DRIVER       ("ecdsa-wolfcrypt")
 
-#define WOLFKM_ECDSA_P192_NAME    ("ecdsa-nist-p192")
-#define WOLFKM_ECDSA_P192_DRIVER  ("ecdsa-nist-p192" WOLFKM_DRIVER_FIPS \
-                                   "-wolfcrypt")
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    #define WOLFKM_ECDSA_P192_NAME    ("ecdsa-nist-p192")
+    #define WOLFKM_ECDSA_P192_DRIVER  ("ecdsa-nist-p192" WOLFKM_DRIVER_FIPS \
+                                       "-wolfcrypt")
 
-#define WOLFKM_ECDSA_P256_NAME    ("ecdsa-nist-p256")
-#define WOLFKM_ECDSA_P256_DRIVER  ("ecdsa-nist-p256" WOLFKM_DRIVER_FIPS \
-                                   "-wolfcrypt")
+    #define WOLFKM_ECDSA_P256_NAME    ("ecdsa-nist-p256")
+    #define WOLFKM_ECDSA_P256_DRIVER  ("ecdsa-nist-p256" WOLFKM_DRIVER_FIPS \
+                                       "-wolfcrypt")
 
-#define WOLFKM_ECDSA_P384_NAME    ("ecdsa-nist-p384")
-#define WOLFKM_ECDSA_P384_DRIVER  ("ecdsa-nist-p384" WOLFKM_DRIVER_FIPS \
-                                   "-wolfcrypt")
+    #define WOLFKM_ECDSA_P384_NAME    ("ecdsa-nist-p384")
+    #define WOLFKM_ECDSA_P384_DRIVER  ("ecdsa-nist-p384" WOLFKM_DRIVER_FIPS \
+                                       "-wolfcrypt")
 
-#define WOLFKM_ECDSA_P521_NAME    ("ecdsa-nist-p521")
-#define WOLFKM_ECDSA_P521_DRIVER  ("ecdsa-nist-p521" WOLFKM_DRIVER_FIPS \
-                                   "-wolfcrypt")
+    #define WOLFKM_ECDSA_P521_NAME    ("ecdsa-nist-p521")
+    #define WOLFKM_ECDSA_P521_DRIVER  ("ecdsa-nist-p521" WOLFKM_DRIVER_FIPS \
+                                       "-wolfcrypt")
+#else
+    #define WOLFKM_ECDSA_P192_NAME    ("x962(ecdsa-nist-p192)")
+    #define WOLFKM_ECDSA_P192_DRIVER  ("x962(ecdsa-nist-p192" \
+                                       WOLFKM_DRIVER_FIPS "-wolfcrypt)")
 
+    #define WOLFKM_ECDSA_P256_NAME    ("x962(ecdsa-nist-p256)")
+    #define WOLFKM_ECDSA_P256_DRIVER  ("x962(ecdsa-nist-p256" \
+                                       WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    #define WOLFKM_ECDSA_P384_NAME    ("x962(ecdsa-nist-p384)")
+    #define WOLFKM_ECDSA_P384_DRIVER  ("x962(ecdsa-nist-p384" \
+                                       WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+
+    #define WOLFKM_ECDSA_P521_NAME    ("x962(ecdsa-nist-p521)")
+    #define WOLFKM_ECDSA_P521_DRIVER  ("x962(ecdsa-nist-p521" \
+                                       WOLFKM_DRIVER_FIPS "-wolfcrypt)")
+#endif /* !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY) */
 
 static int  linuxkm_test_ecdsa_nist_driver(const char * driver,
                                            const byte * pub, word32 pub_len,
@@ -112,6 +129,8 @@ static int          km_ecdsa_verify(struct akcipher_request *req);
 static int          km_ecdsa_verify(struct crypto_sig *tfm,
                                     const void *src, unsigned int slen,
                                     const void *digest, unsigned int dlen);
+static unsigned int km_ecdsa_key_size(struct tfm_type *tfm);
+static unsigned int km_ecdsa_digest_size(struct tfm_type *tfm);
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 /* ecdsa_nist_pN callbacks */
@@ -135,6 +154,7 @@ static struct alg_type ecdsa_nist_p192 = {
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
+    .digest_size          = km_ecdsa_digest_size,
     #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p192_init,
@@ -152,6 +172,7 @@ static struct alg_type ecdsa_nist_p256 = {
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
+    .digest_size          = km_ecdsa_digest_size,
     #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p256_init,
@@ -168,6 +189,7 @@ static struct alg_type ecdsa_nist_p384 = {
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
+    .digest_size          = km_ecdsa_digest_size,
     #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p384_init,
@@ -185,6 +207,7 @@ static struct alg_type ecdsa_nist_p521 = {
     .set_pub_key          = km_ecdsa_set_pub,
     #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     .key_size             = km_ecdsa_key_size,
+    .digest_size          = km_ecdsa_digest_size,
     #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p521_init,
@@ -296,21 +319,20 @@ static unsigned int km_ecdsa_digest_size(struct tfm_type *tfm)
 
     ctx = tfm_ctx_cb(tfm);
 
-
     #ifdef WOLFSSL_SHA512
     digest_size = WC_SHA512_DIGEST_SIZE;
     #elif defined(WOLFSSL_SHA384)
     digest_size = WC_SHA384_DIGEST_SIZE;
     #elif !defined(NO_SHA256)
     digest_size = WC_SHA256_DIGEST_SIZE;
-    #elif !defined(WOLFSSL_SHA224)
+    #elif defined(WOLFSSL_SHA224)
     digest_size = WC_SHA224_DIGEST_SIZE;
     #else
-    #error ecdsa without hash support not allowed
+    #error ecdsa without hash support not allowed.
     #endif
 
     #ifdef WOLFKM_DEBUG_ECDSA
-    pr_info("info: exiting km_ecdsa_key_size\n");
+    pr_info("info: exiting km_ecdsa_digest_size\n");
     #endif /* WOLFKM_DEBUG_ECDSA */
     return digest_size;
 }
