@@ -133,6 +133,9 @@ static struct alg_type ecdsa_nist_p192 = {
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
     .verify               = km_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
+    #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    .key_size             = km_ecdsa_key_size,
+    #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p192_init,
     .exit                 = km_ecdsa_exit,
@@ -147,6 +150,9 @@ static struct alg_type ecdsa_nist_p256 = {
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
     .verify               = km_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
+    #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    .key_size             = km_ecdsa_key_size,
+    #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p256_init,
     .exit                 = km_ecdsa_exit,
@@ -160,6 +166,9 @@ static struct alg_type ecdsa_nist_p384 = {
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
     .verify               = km_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
+    #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    .key_size             = km_ecdsa_key_size,
+    #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p384_init,
     .exit                 = km_ecdsa_exit,
@@ -174,6 +183,9 @@ static struct alg_type ecdsa_nist_p521 = {
     .base.cra_ctxsize     = sizeof(struct km_ecdsa_ctx),
     .verify               = km_ecdsa_verify,
     .set_pub_key          = km_ecdsa_set_pub,
+    #if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    .key_size             = km_ecdsa_key_size,
+    #endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     .max_size             = km_ecdsa_max_size,
     .init                 = km_ecdsa_nist_p521_init,
     .exit                 = km_ecdsa_exit,
@@ -260,6 +272,49 @@ static int km_ecdsa_set_pub(struct tfm_type *tfm, const void *key,
     #endif /* WOLFKM_DEBUG_ECDSA */
     return err;
 }
+
+#if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+static unsigned int km_ecdsa_key_size(struct tfm_type *tfm)
+{
+    struct km_ecdsa_ctx * ctx = NULL;
+
+    ctx = tfm_ctx_cb(tfm);
+
+    #ifdef WOLFKM_DEBUG_ECDSA
+    pr_info("info: exiting km_ecdsa_key_size\n");
+    #endif /* WOLFKM_DEBUG_ECDSA */
+    return (unsigned int) ((ctx->curve_len << 1) + 1);
+}
+
+/* Returns maximum supported digest size.
+ * This function is marked optional in include/crypto/sig.h
+ * */
+static unsigned int km_ecdsa_digest_size(struct tfm_type *tfm)
+{
+    struct km_ecdsa_ctx * ctx = NULL;
+    unsigned int          digest_size = 0;
+
+    ctx = tfm_ctx_cb(tfm);
+
+
+    #ifdef WOLFSSL_SHA512
+    digest_size = WC_SHA512_DIGEST_SIZE;
+    #elif defined(WOLFSSL_SHA384)
+    digest_size = WC_SHA384_DIGEST_SIZE;
+    #elif !defined(NO_SHA256)
+    digest_size = WC_SHA256_DIGEST_SIZE;
+    #elif !defined(WOLFSSL_SHA224)
+    digest_size = WC_SHA224_DIGEST_SIZE;
+    #else
+    #error ecdsa without hash support not allowed
+    #endif
+
+    #ifdef WOLFKM_DEBUG_ECDSA
+    pr_info("info: exiting km_ecdsa_key_size\n");
+    #endif /* WOLFKM_DEBUG_ECDSA */
+    return digest_size;
+}
+#endif /* LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 static unsigned int km_ecdsa_max_size(struct tfm_type *tfm)
 {
