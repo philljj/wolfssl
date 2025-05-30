@@ -44,26 +44,11 @@
 #endif /* LINUXKM_LKCAPI_REGISTER_ECDSA */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
-    /*
-     * notes:
-     *   - ecdsa supported with linux 6.12 and earlier for now, only.
-     *   - pkcs1pad rsa supported both before and after linux 6.13, but
-     *     without sign/verify after linux 6.13.
-     *
-     * In linux 6.13 the sign/verify callbacks were removed from
-     * akcipher_alg, and ecdsa changed from a struct akcipher_alg type to
-     * struct sig_alg type.
-     *
-     * pkcs1pad rsa remained a struct akcipher_alg, but without sign/verify
-     * functionality.
-     */
     #if defined (LINUXKM_LKCAPI_REGISTER_ECDSA)
-        #undef LINUXKM_LKCAPI_REGISTER_ECDSA
+        #if !defined (LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+            #define LINUXKM_AKCIPHER_NO_SIGNVERIFY
+        #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
     #endif /* LINUXKM_LKCAPI_REGISTER_ECDSA */
-
-    #if defined(LINUXKM_LKCAPI_REGISTER_ALL_KCONFIG) && defined(CONFIG_CRYPTO_ECDSA)
-        #error Config conflict: missing implementation forces off LINUXKM_LKCAPI_REGISTER_ECDSA.
-    #endif
 #endif
 
 #if defined(LINUXKM_LKCAPI_REGISTER_ALL_KCONFIG) && \
@@ -117,24 +102,30 @@ struct km_ecdsa_ctx {
 };
 
 /* shared ecdsa callbacks */
-static void         km_ecdsa_exit(struct crypto_akcipher *tfm);
-static int          km_ecdsa_set_pub(struct crypto_akcipher *tfm,
-                                    const void *key, unsigned int keylen);
-static unsigned int km_ecdsa_max_size(struct crypto_akcipher *tfm);
+static void         km_ecdsa_exit(struct tfm_type *tfm);
+static int          km_ecdsa_set_pub(struct tfm_type *tfm,
+                                     const void *key, unsigned int keylen);
+static unsigned int km_ecdsa_max_size(struct tfm_type *tfm);
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
 static int          km_ecdsa_verify(struct akcipher_request *req);
+#else
+static int          km_ecdsa_verify(struct crypto_sig *tfm,
+                                    const void *src, unsigned int slen,
+                                    const void *digest, unsigned int dlen);
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 /* ecdsa_nist_pN callbacks */
 #if defined(LINUXKM_ECC192)
-static int          km_ecdsa_nist_p192_init(struct crypto_akcipher *tfm);
+static int          km_ecdsa_nist_p192_init(struct tfm_type *tfm);
 #endif /* LINUXKM_ECC192 */
-static int          km_ecdsa_nist_p256_init(struct crypto_akcipher *tfm);
-static int          km_ecdsa_nist_p384_init(struct crypto_akcipher *tfm);
+static int          km_ecdsa_nist_p256_init(struct tfm_type *tfm);
+static int          km_ecdsa_nist_p384_init(struct tfm_type *tfm);
 #if defined(HAVE_ECC521)
-static int          km_ecdsa_nist_p521_init(struct crypto_akcipher *tfm);
+static int          km_ecdsa_nist_p521_init(struct tfm_type *tfm);
 #endif /* HAVE_ECC521 */
 
 #if defined(LINUXKM_ECC192)
-static struct akcipher_alg ecdsa_nist_p192 = {
+static struct alg_type ecdsa_nist_p192 = {
     .base.cra_name        = WOLFKM_ECDSA_P192_NAME,
     .base.cra_driver_name = WOLFKM_ECDSA_P192_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
@@ -148,7 +139,7 @@ static struct akcipher_alg ecdsa_nist_p192 = {
 };
 #endif /* LINUXKM_ECC192 */
 
-static struct akcipher_alg ecdsa_nist_p256 = {
+static struct alg_type ecdsa_nist_p256 = {
     .base.cra_name        = WOLFKM_ECDSA_P256_NAME,
     .base.cra_driver_name = WOLFKM_ECDSA_P256_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
@@ -161,7 +152,7 @@ static struct akcipher_alg ecdsa_nist_p256 = {
     .exit                 = km_ecdsa_exit,
 };
 
-static struct akcipher_alg ecdsa_nist_p384 = {
+static struct alg_type ecdsa_nist_p384 = {
     .base.cra_name        = WOLFKM_ECDSA_P384_NAME,
     .base.cra_driver_name = WOLFKM_ECDSA_P384_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
@@ -175,7 +166,7 @@ static struct akcipher_alg ecdsa_nist_p384 = {
 };
 
 #if defined(HAVE_ECC521)
-static struct akcipher_alg ecdsa_nist_p521 = {
+static struct alg_type ecdsa_nist_p521 = {
     .base.cra_name        = WOLFKM_ECDSA_P521_NAME,
     .base.cra_driver_name = WOLFKM_ECDSA_P521_DRIVER,
     .base.cra_priority    = WOLFSSL_LINUXKM_LKCAPI_PRIORITY,
@@ -195,18 +186,18 @@ static struct akcipher_alg ecdsa_nist_p521 = {
  * Kernel crypto ECDSA api expects raw uncompressed format with concatenated
  * x and y points, with leading 0x04 on pub key.
  *
- * param tfm     the crypto_akcipher transform
+ * param tfm     the tfm_type transform
  * param key     raw uncompressed x, y points, with leading 0x04
  * param keylen  key length
  * */
-static int km_ecdsa_set_pub(struct crypto_akcipher *tfm, const void *key,
+static int km_ecdsa_set_pub(struct tfm_type *tfm, const void *key,
                             unsigned int keylen)
 {
     int                   err = 0;
     struct km_ecdsa_ctx * ctx = NULL;
     const byte *          pub = key;
 
-    ctx = akcipher_tfm_ctx(tfm);
+    ctx = tfm_ctx_cb(tfm);
 
     switch (ctx->curve_len) {
     #if defined(LINUXKM_ECC192)
@@ -270,11 +261,11 @@ static int km_ecdsa_set_pub(struct crypto_akcipher *tfm, const void *key,
     return err;
 }
 
-static unsigned int km_ecdsa_max_size(struct crypto_akcipher *tfm)
+static unsigned int km_ecdsa_max_size(struct tfm_type *tfm)
 {
     struct km_ecdsa_ctx * ctx = NULL;
 
-    ctx = akcipher_tfm_ctx(tfm);
+    ctx = tfm_ctx_cb(tfm);
 
     #ifdef WOLFKM_DEBUG_ECDSA
     pr_info("info: exiting km_ecdsa_max_size\n");
@@ -282,11 +273,11 @@ static unsigned int km_ecdsa_max_size(struct crypto_akcipher *tfm)
     return (unsigned int) ctx->curve_len;
 }
 
-static void km_ecdsa_exit(struct crypto_akcipher *tfm)
+static void km_ecdsa_exit(struct tfm_type *tfm)
 {
     struct km_ecdsa_ctx * ctx = NULL;
 
-    ctx = akcipher_tfm_ctx(tfm);
+    ctx = tfm_ctx_cb(tfm);
 
     if (ctx->key) {
         wc_ecc_free(ctx->key);
@@ -300,12 +291,12 @@ static void km_ecdsa_exit(struct crypto_akcipher *tfm)
     return;
 }
 
-static int km_ecdsa_init(struct crypto_akcipher *tfm, int curve_id)
+static int km_ecdsa_init(struct tfm_type *tfm, int curve_id)
 {
     struct km_ecdsa_ctx * ctx = NULL;
     int                   ret = 0;
 
-    ctx = akcipher_tfm_ctx(tfm);
+    ctx = tfm_ctx_cb(tfm);
     memset(ctx, 0, sizeof(struct km_ecdsa_ctx));
     ctx->curve_id = curve_id;
     ctx->curve_len = 0;
@@ -341,29 +332,30 @@ static int km_ecdsa_init(struct crypto_akcipher *tfm, int curve_id)
 }
 
 #if defined(LINUXKM_ECC192)
-static int km_ecdsa_nist_p192_init(struct crypto_akcipher *tfm)
+static int km_ecdsa_nist_p192_init(struct tfm_type *tfm)
 {
     return km_ecdsa_init(tfm, ECC_SECP192R1);
 }
 #endif /* LINUXKM_ECC192 */
 
-static int km_ecdsa_nist_p256_init(struct crypto_akcipher *tfm)
+static int km_ecdsa_nist_p256_init(struct tfm_type *tfm)
 {
     return km_ecdsa_init(tfm, ECC_SECP256R1);
 }
 
-static int km_ecdsa_nist_p384_init(struct crypto_akcipher *tfm)
+static int km_ecdsa_nist_p384_init(struct tfm_type *tfm)
 {
     return km_ecdsa_init(tfm, ECC_SECP384R1);
 }
 
 #if defined(HAVE_ECC521)
-static int km_ecdsa_nist_p521_init(struct crypto_akcipher *tfm)
+static int km_ecdsa_nist_p521_init(struct tfm_type *tfm)
 {
     return km_ecdsa_init(tfm, ECC_SECP521R1);
 }
 #endif /* HAVE_ECC521 */
 
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
 /*
  * Verify an ecdsa_nist signature.
  *
@@ -448,6 +440,69 @@ ecdsa_verify_end:
     #endif /* WOLFKM_DEBUG_ECDSA */
     return err;
 }
+#else
+/*
+ * Verify an ecdsa_nist signature.
+ *
+ * src:
+ *   - src contains the signature.
+ *   - slen must == key_size
+ *
+ * digest:
+ *   - the digest that was encoded, padded, and signed previously.
+ *   - dlen must be the correct digest len.
+ *
+ * See kernel (6.13 or later):
+ *   - include/crypto/sig.h
+ */
+static int km_ecdsa_verify(struct crypto_sig *tfm,
+                           const void *src, unsigned int slen,
+                           const void *digest, unsigned int dlen)
+{
+    struct km_ecdsa_ctx *    ctx = NULL;
+    int                      result = -1;
+    int                      err = -1;
+
+    if (src == NULL || digest == NULL) {
+        return -EINVAL;
+    }
+
+    ctx = crypto_sig_ctx(tfm);
+
+    if (slen<= 0 || dlen <= 0) {
+        err = -EINVAL;
+        goto ecdsa_verify_end;
+    }
+
+    err = wc_ecc_verify_hash(src, slen, digest, dlen, &result, ctx->key);
+
+    if (err) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("error: %s: ecdsa verify: verify_hash returned: %d\n",
+               WOLFKM_ECDSA_DRIVER, err);
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EBADMSG;
+        goto ecdsa_verify_end;
+    }
+
+    if (result != 1) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("info: %s: ecdsa verify: verify fail: %d\n",
+               WOLFKM_ECDSA_DRIVER, result);
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EBADMSG;
+        goto ecdsa_verify_end;
+    }
+
+ecdsa_verify_end:
+    #ifdef WOLFKM_DEBUG_ECDSA
+    pr_info("info: exiting km_ecdsa_verify hash_len %d, sig_len %d, "
+            "err %d, result %d\n", dlen, slen, err, result);
+    #endif /* WOLFKM_DEBUG_ECDSA */
+    return err;
+}
+
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 #if defined(LINUXKM_ECC192)
 static int linuxkm_test_ecdsa_nist_p192(void)

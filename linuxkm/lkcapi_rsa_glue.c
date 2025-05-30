@@ -194,13 +194,7 @@ static unsigned int km_rsa_max_size(struct crypto_akcipher *tfm);
     static int          km_direct_rsa_dec(struct akcipher_request *req);
 #endif /* LINUXKM_DIRECT_RSA */
 
-#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
-    #define tfm_type   crypto_akcipher
-    #define tfm_ctx_cb akcipher_tfm_ctx
-#else
-    #define tfm_type   crypto_sig
-    #define tfm_ctx_cb crypto_sig_ctx
-
+#if defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
     static int          km_pkcs1pad_init(struct crypto_akcipher * tfm);
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 

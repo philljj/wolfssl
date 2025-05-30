@@ -212,6 +212,20 @@ WC_MAYBE_UNUSED static int check_shash_driver_masking(struct crypto_shash *tfm, 
 #endif
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+    #define LINUXKM_AKCIPHER_NO_SIGNVERIFY
+#endif /* linux >= 6.13.0 */
+
+#if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+    #define tfm_type   crypto_akcipher
+    #define tfm_ctx_cb akcipher_tfm_ctx
+    #define alg_type   akcipher_alg
+#else
+    #define tfm_type   crypto_sig
+    #define tfm_ctx_cb crypto_sig_ctx
+    #define alg_type   sig_alg 
+#endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
+
 #include "lkcapi_aes_glue.c"
 #include "lkcapi_sha_glue.c"
 #include "lkcapi_ecdsa_glue.c"
@@ -476,21 +490,39 @@ static int linuxkm_lkcapi_register(void)
         fips_enabled = 0;
     #endif
 
-    #if defined(LINUXKM_ECC192)
-    REGISTER_ALG(ecdsa_nist_p192, akcipher,
-                 linuxkm_test_ecdsa_nist_p192);
-    #endif /* LINUXKM_ECC192 */
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+        #if defined(LINUXKM_ECC192)
+        REGISTER_ALG(ecdsa_nist_p192, akcipher,
+                     linuxkm_test_ecdsa_nist_p192);
+        #endif /* LINUXKM_ECC192 */
 
-    REGISTER_ALG(ecdsa_nist_p256, akcipher,
-                 linuxkm_test_ecdsa_nist_p256);
+        REGISTER_ALG(ecdsa_nist_p256, akcipher,
+                     linuxkm_test_ecdsa_nist_p256);
 
-    REGISTER_ALG(ecdsa_nist_p384, akcipher,
-                 linuxkm_test_ecdsa_nist_p384);
+        REGISTER_ALG(ecdsa_nist_p384, akcipher,
+                     linuxkm_test_ecdsa_nist_p384);
 
-    #if defined(HAVE_ECC521)
-    REGISTER_ALG(ecdsa_nist_p521, akcipher,
-                 linuxkm_test_ecdsa_nist_p521);
-    #endif /* HAVE_ECC521 */
+        #if defined(HAVE_ECC521)
+        REGISTER_ALG(ecdsa_nist_p521, akcipher,
+                     linuxkm_test_ecdsa_nist_p521);
+        #endif /* HAVE_ECC521 */
+    #else
+        #if defined(LINUXKM_ECC192)
+        REGISTER_ALG(ecdsa_nist_p192, sig,
+                     linuxkm_test_ecdsa_nist_p192);
+        #endif /* LINUXKM_ECC192 */
+
+        REGISTER_ALG(ecdsa_nist_p256, sig,
+                     linuxkm_test_ecdsa_nist_p256);
+
+        REGISTER_ALG(ecdsa_nist_p384, sig,
+                     linuxkm_test_ecdsa_nist_p384);
+
+        #if defined(HAVE_ECC521)
+        REGISTER_ALG(ecdsa_nist_p521, sig,
+                     linuxkm_test_ecdsa_nist_p521);
+        #endif /* HAVE_ECC521 */
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
     #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)) &&    \
         defined(HAVE_FIPS) && defined(CONFIG_CRYPTO_FIPS) && \
@@ -794,14 +826,26 @@ static int linuxkm_lkcapi_unregister(void)
 #endif
 
 #ifdef LINUXKM_LKCAPI_REGISTER_ECDSA
-    #if defined(LINUXKM_ECC192)
-        UNREGISTER_ALG(ecdsa_nist_p192, akcipher);
-    #endif /* LINUXKM_ECC192 */
-    UNREGISTER_ALG(ecdsa_nist_p256, akcipher);
-    UNREGISTER_ALG(ecdsa_nist_p384, akcipher);
-    #if defined(HAVE_ECC521)
-        UNREGISTER_ALG(ecdsa_nist_p521, akcipher);
-    #endif /* HAVE_ECC521 */
+    #if !defined(LINUXKM_AKCIPHER_NO_SIGNVERIFY)
+        #if defined(LINUXKM_ECC192)
+            UNREGISTER_ALG(ecdsa_nist_p192, akcipher);
+        #endif /* LINUXKM_ECC192 */
+        UNREGISTER_ALG(ecdsa_nist_p256, akcipher);
+        UNREGISTER_ALG(ecdsa_nist_p384, akcipher);
+        #if defined(HAVE_ECC521)
+            UNREGISTER_ALG(ecdsa_nist_p521, akcipher);
+        #endif /* HAVE_ECC521 */
+    #else
+        #if defined(LINUXKM_ECC192)
+            UNREGISTER_ALG(ecdsa_nist_p192, sig);
+        #endif /* LINUXKM_ECC192 */
+        UNREGISTER_ALG(ecdsa_nist_p256, sig);
+        UNREGISTER_ALG(ecdsa_nist_p384, sig);
+        #if defined(HAVE_ECC521)
+            UNREGISTER_ALG(ecdsa_nist_p521, sig);
+        #endif /* HAVE_ECC521 */
+    #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
+
 #endif /* LINUXKM_LKCAPI_REGISTER_ECDSA */
 
 #ifdef LINUXKM_LKCAPI_REGISTER_ECDH
