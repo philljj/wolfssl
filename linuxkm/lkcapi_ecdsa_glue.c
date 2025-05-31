@@ -700,7 +700,7 @@ ecdsa_verify_end:
  *   - slen must == (curve_len << 1)
  *
  * digest:
- *   - the digest that was encoded, padded, and signed previously.
+ *   - the digest that was signed.
  *   - dlen must be the correct digest len.
  *
  * See kernel (6.13 or later):
@@ -723,7 +723,16 @@ static int km_p1363_ecdsa_verify(struct crypto_sig *tfm,
 
     ctx = crypto_sig_ctx(tfm);
 
-    if (slen <= 0 || dlen <= 0) {
+    if (slen != (ctx->curve_len << 1)) {
+        #ifdef WOLFKM_DEBUG_ECDSA
+        pr_err("error: %s: ecdsa verify: got slen %d, expected %d\n",
+               WOLFKM_ECDSA_DRIVER, slen, (ctx->curve_len << 1));
+        #endif /* WOLFKM_DEBUG_ECDSA */
+        err = -EINVAL;
+        goto ecdsa_verify_end;
+    }
+
+    if (dlen <= 0) {
         err = -EINVAL;
         goto ecdsa_verify_end;
     }
@@ -734,6 +743,9 @@ static int km_p1363_ecdsa_verify(struct crypto_sig *tfm,
         err = -ENOMEM;
         goto ecdsa_verify_end;
     }
+
+    /* convert signature from raw r, s unsigned bin to asn.1 encoded
+     * signature. */
     err = wc_ecc_rs_raw_to_sig(src, ctx->curve_len, src + ctx->curve_len,
                                ctx->curve_len, asn_sig, &asn_sig_len);
     if (err != MP_OKAY) {
@@ -770,12 +782,11 @@ ecdsa_verify_end:
     if (asn_sig) { free(asn_sig); asn_sig = NULL; }
     #ifdef WOLFKM_DEBUG_ECDSA
     pr_info("info: exiting km_p1363_ecdsa_verify hash_len %d, sig_len %d, "
-            "err %d, result %d\n", dlen, slen, err, result);
+            "asn_sig_len %d, err %d, result %d\n", dlen, slen, asn_sig_len,
+             err, result);
     #endif /* WOLFKM_DEBUG_ECDSA */
     return err;
 }
-
-
 #endif /* !LINUXKM_AKCIPHER_NO_SIGNVERIFY */
 
 #if defined(LINUXKM_ECC192)
