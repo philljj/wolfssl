@@ -38,30 +38,22 @@
       (int)_xatoi_ret;                                      \
     })
 
+#if !defined(XMALLOC_OVERRIDE)
+    #error bsdkm requires XMALLOC_OVERRIDE
+#endif /* !XMALLOC_OVERRIDE */
+
 /* This is incorrect placeholder. Likely need:
  *   - MALLOC_DEFINE(M_WOLFSSL, "wolfssl", "wolfSSL kernel memory");
        in the main wolfkmod source file.
  *   - Need to use contigmalloc or malloc from sys/malloc.h
  *   - Need extern struct malloc_type M_WOLFSSL; here or elsewhere.
  *   - */
-#ifdef WOLFSSL_TRACK_MEMORY
-    #define XMALLOC(s, h, t)     ({(void)(h); (void)(t); wolfSSL_Malloc(s);})
-    #ifdef WOLFSSL_XFREE_NO_NULLNESS_CHECK
-        #define XFREE(p, h, t)       ({(void)(h); (void)(t); wolfSSL_Free(p);})
-    #else
-        #define XFREE(p, h, t)       ({void* _xp; (void)(h); _xp = (p); if(_xp) wolfSSL_Free(_xp);})
-    #endif
-    #define XREALLOC(p, n, h, t) ({(void)(h); (void)(t); wolfSSL_Realloc(p, n);})
-#else
-    #if !defined(XMALLOC_USER) && !defined(XMALLOC_OVERRIDE)
         /* placeholder, fix later. */
-        #define XMALLOC(s, h, t)     ({(void)(h); (void)(t); malloc(s, NULL, 0);})
-        #ifdef WOLFSSL_XFREE_NO_NULLNESS_CHECK
-            #define XFREE(p, h, t)       ({(void)(h); (void)(t); free(p);})
-        #else
-            #define XFREE(p, h, t)       ({void* _xp; (void)(h); (void)(t); _xp = (p); if(_xp) free(_xp);})
-        #endif
-    #endif /* !XMALLOC_USER && !XMALLOC_OVERRIDE */
+#define XMALLOC(s, h, t)     ({(void)(h); (void)(t); malloc(s, NULL, 0);})
+#ifdef WOLFSSL_XFREE_NO_NULLNESS_CHECK
+    #define XFREE(p, h, t)       ({(void)(h); (void)(t); free(p);})
+#else
+    #define XFREE(p, h, t)       ({void* _xp; (void)(h); (void)(t); _xp = (p); if(_xp) free(_xp);})
 #endif
 
 #ifndef CHAR_BIT

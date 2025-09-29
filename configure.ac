@@ -780,6 +780,8 @@ then
     output_objdir="$(realpath "$output_objdir")/bsdkm"
 
     AM_CFLAGS="$AM_CFLAGS -DNO_DEV_RANDOM -DNO_WRITEV -DNO_STDIO_FILESYSTEM -DWOLFSSL_NO_SOCK -DWOLFSSL_USER_IO"
+    AM_CFLAGS="$AM_CFLAGS -DXMALLOC_OVERRIDE"
+    # until mutexes are supported.
     AM_CFLAGS="$AM_CFLAGS -DSINGLE_THREADED"
 fi
 
