@@ -476,9 +476,10 @@ WOLFSSL_API void wolfSSL_SetLoggingPrefix(const char* prefix);
     #include <android/log.h>
 #elif defined(WOLFSSL_XILINX)
     #include "xil_printf.h"
-#elif defined(WOLFSSL_LINUXKM)
+#elif defined(WOLFSSL_LINUXKM) || defined(WOLFSSL_BSDKM)
     /* the requisite linux/kernel.h is included in linuxkm_wc_port.h, with
-     * incompatible warnings masked out.
+     * incompatible warnings masked out,
+     * or bsdkm/bsdkm_wc_port.h.
      */
 #elif defined(FUSION_RTOS)
     #include <fclstdio.h>

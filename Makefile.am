@@ -179,6 +179,7 @@ include sslSniffer/sslSnifferTest/include.am
 include debian/include.am
 include rpm/include.am
 include linuxkm/include.am
+include bsdkm/include.am
 include zephyr/include.am
 include RTOS/nuttx/include.am
 

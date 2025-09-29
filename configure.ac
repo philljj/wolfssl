@@ -138,6 +138,12 @@ AC_ARG_ENABLE([linuxkm-defaults],
     [ENABLED_LINUXKM_DEFAULTS=$ENABLED_LINUXKM]
     )
 
+# FreeBSD Kernel Module
+AC_ARG_ENABLE([bsdkm],
+    [AS_HELP_STRING([--enable-bsdkm],[Enable FreeBSD Kernel Module (default: disabled)])],
+    [ENABLED_BSDKM=$enableval],
+    [ENABLED_BSDKM=no]
+    )
 
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h netinet/in.h stddef.h time.h sys/ioctl.h sys/socket.h sys/time.h errno.h sys/un.h ctype.h])
 AC_CHECK_LIB([network],[socket])
@@ -766,6 +772,14 @@ then
     AM_CFLAGS="$AM_CFLAGS -DNO_DEV_RANDOM -DNO_WRITEV -DNO_STDIO_FILESYSTEM -DWOLFSSL_NO_SOCK -DWOLFSSL_USER_IO"
 fi
 
+if test "x$ENABLED_BSDKM" = "xyes"
+then
+    AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_BSDKM -DWC_SIPHASH_NO_ASM"
+    ENABLED_NO_LIBRARY=yes
+    ENABLED_BENCHMARK=no
+
+    AM_CFLAGS="$AM_CFLAGS -DNO_DEV_RANDOM -DNO_WRITEV -DNO_STDIO_FILESYSTEM -DWOLFSSL_NO_SOCK -DWOLFSSL_USER_IO"
+fi
 
 # MATH LIBRARY SELECTION
 
@@ -10964,6 +10978,7 @@ AM_CONDITIONAL([BUILD_PKCS7],[test "x$ENABLED_PKCS7" = "xyes" || test "x$ENABLED
 AM_CONDITIONAL([BUILD_SMIME],[test "x$ENABLED_SMIME" = "xyes" || test "x$ENABLED_USERSETTINGS" = "xyes"])
 AM_CONDITIONAL([BUILD_HASHFLAGS],[test "x$ENABLED_HASHFLAGS" = "xyes"])
 AM_CONDITIONAL([BUILD_LINUXKM],[test "$ENABLED_LINUXKM" = "yes"])
+AM_CONDITIONAL([BUILD_BSDKM],[test "$ENABLED_BSDKM" = "yes"])
 AM_CONDITIONAL([BUILD_NO_LIBRARY],[test "$ENABLED_NO_LIBRARY" = "yes"])
 AM_CONDITIONAL([BUILD_BENCHMARK],[test "$ENABLED_BENCHMARK" = "yes"])
 AM_CONDITIONAL([BUILD_RC2],[test "x$ENABLED_RC2" = "xyes"])

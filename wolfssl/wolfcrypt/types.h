@@ -580,9 +580,10 @@ enum {
             ((void)(h), (void)(t), realloc((p), (size_t)(n))) /* native heap */
     #endif
 
-#elif defined(WOLFSSL_LINUXKM)
+#elif defined(WOLFSSL_LINUXKM) || defined(WOLFSSL_BSDKM)
 
-    /* definitions are in linuxkm/linuxkm_wc_port.h */
+    /* definitions are in linuxkm/linuxkm_wc_port.h,
+    * or bsdkm/bsdkm_wc_port.h */
 
 #elif !defined(MICRIUM_MALLOC) && !defined(EBSNET) \
         && !defined(WOLFSSL_SAFERTOS) && !defined(FREESCALE_MQX) \

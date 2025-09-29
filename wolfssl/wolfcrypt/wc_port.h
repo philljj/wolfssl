@@ -62,6 +62,10 @@
     #include "../../linuxkm/linuxkm_wc_port.h"
 #endif /* WOLFSSL_LINUXKM */
 
+#ifdef WOLFSSL_BSDKM
+    #include "../../bsdkm/bsdkm_wc_port.h"
+#endif /* WOLFSSL_BSDKM */
+
 #ifndef WARN_UNUSED_RESULT
     #if defined(WOLFSSL_LINUXKM) && defined(__must_check)
         #define WARN_UNUSED_RESULT __must_check
@@ -330,8 +334,9 @@
 #else
     #ifndef SINGLE_THREADED
         #ifndef WOLFSSL_USER_MUTEX
-            #ifdef WOLFSSL_LINUXKM
-                /* definitions are in linuxkm/linuxkm_wc_port.h */
+            #if defined(WOLFSSL_LINUXKM) || defined(WOLFSSL_BSDKM)
+                /* definitions are in linuxkm/linuxkm_wc_port.h,
+                 * or bsdkm/bsdkm_wc_port.h */
             #else
                 #define WOLFSSL_PTHREADS
                 #include <pthread.h>
@@ -446,8 +451,9 @@
         typedef OS_MUTEX wolfSSL_Mutex;
     #elif defined(WOLFSSL_USER_MUTEX)
         /* typedef User_Mutex wolfSSL_Mutex; */
-    #elif defined(WOLFSSL_LINUXKM)
-        /* definitions are in linuxkm/linuxkm_wc_port.h */
+    #elif defined(WOLFSSL_LINUXKM) || defined(WOLFSSL_BSDKM)
+        /* definitions are in linuxkm/linuxkm_wc_port.h,
+        * or bsdkm/bsdkm_wc_port.h */
     #elif defined(__WATCOMC__)
         /* OS/2 */
         typedef ULONG wolfSSL_Mutex;
@@ -1280,6 +1286,15 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
     #endif /* max */
 #endif /* USE_WINDOWS_API */
 
+#if defined(WOLFSSL_BSDKM)
+    /* FreeBSD kernel defines its own min, max functions in sys/libkern.h */
+    #undef  WOLFSSL_HAVE_MIN
+    #define WOLFSSL_HAVE_MIN
+
+    #undef  WOLFSSL_HAVE_MAX
+    #define WOLFSSL_HAVE_MAX
+#endif /* WOLFSSL_BSDKM */
+
 #ifdef __QNXNTO__
     #define WOLFSSL_HAVE_MIN
     #define WOLFSSL_HAVE_MAX
@@ -1477,10 +1492,10 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
     #define WOLFSSL_GMTIME
     #define USE_WOLF_TM
 
+#elif defined(WOLFSSL_LINUXKM) || defined(WOLFSSL_BSDKM)
 
-#elif defined(WOLFSSL_LINUXKM)
-
-    /* definitions are in linuxkm/linuxkm_wc_port.h */
+    /* definitions are in linuxkm/linuxkm_wc_port.h,
+    * or bsdkm/bsdkm_wc_port.h */
 
 #elif defined(HAL_RTC_MODULE_ENABLED)
     #include <time.h>
