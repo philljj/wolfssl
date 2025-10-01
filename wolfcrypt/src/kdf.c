@@ -1475,6 +1475,27 @@ int wc_KDA_KDF_twostep(const byte* z, word32 zSz, const byte* fixedInfo,
                        word32 outputSz)
 {
     int ret = -1;
+
+    if (algoType == WC_ALGO_TYPE_HMAC) {
+        ret = 0;
+    }
+    else if (algoType == WC_ALGO_TYPE_HMAC) {
+        ret = 0;
+    }
+    else {
+        WOLFSSL_MSG_EX("wc_KDA_KDF_twostep: unsupported algoType: %d",
+                       algoType);
+        ret = -1;
+    }
+
+    (void)z;
+    (void)zSz;
+    (void)fixedInfo;
+    (void)fixedInfoSz;
+    (void)derivedSecretSz;
+    (void)output;
+    (void)outputSz;
+
     return ret;
 }
 #endif /* WC_KDF_NIST_SP_800_56C */
