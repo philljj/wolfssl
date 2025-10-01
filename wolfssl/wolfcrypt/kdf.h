@@ -170,6 +170,10 @@ WOLFSSL_API int wc_SRTP_KDF_kdr_to_idx(word32 kdr);
 WOLFSSL_API int wc_KDA_KDF_onestep(const byte* z, word32 zSz,
     const byte* fixedInfo, word32 fixedInfoSz, word32 derivedSecretSz,
     enum wc_HashType hashType, byte* output, word32 outputSz);
+
+WOLFSSL_API int wc_KDA_KDF_twostep(const byte* z, word32 zSz,
+    const byte* fixedInfo, word32 fixedInfoSz, word32 derivedSecretSz,
+    enum wc_AlgoType algoType, byte* output, word32 outputSz);
 #endif
 #ifdef __cplusplus
     } /* extern "C" */
