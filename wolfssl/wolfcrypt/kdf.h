@@ -175,6 +175,13 @@ WOLFSSL_API int wc_KDA_KDF_twostep(const byte* z, word32 zSz,
     const byte* fixedInfo, word32 fixedInfoSz, word32 derivedSecretSz,
     enum wc_AlgoType algoType, byte* output, word32 outputSz);
 #endif
+
+#ifdef WC_KDF_NIST_SP_800_108
+WOLFSSL_API int wc_KDA_KDF_PRF_cmac(const byte* Kin, word32 KinSz,
+                                    const byte* fixedInfo, word32 fixedInfoSz,
+                                    word32 KeySz, byte* Kout, word32 KoutSz);
+#endif /* WC_KDF_NIST_SP_800_108 */
+
 #ifdef __cplusplus
     } /* extern "C" */
 #endif

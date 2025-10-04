@@ -1469,6 +1469,23 @@ int wc_KDA_KDF_onestep(const byte* z, word32 zSz, const byte* fixedInfo,
     return ret;
 }
 
+/**
+ * \brief Performs the two-step key derivation function (KDF) as specified in
+ * SP800-56C, section 5.1.
+ *
+ * \param [in] z The input keying material.
+ * \param [in] zSz The size of the input keying material.
+ * \param [in] fixedInfo The fixed information to be included in the KDF.
+ * \param [in] fixedInfoSz The size of the fixed information.
+ * \param [in] derivedSecretSz The desired size of the derived secret.
+ * \param [in] hashType The hash algorithm to be used in the KDF.
+ * \param [out] output The buffer to store the derived secret.
+ * \param [in] outputSz The size of the output buffer.
+ *
+ * \return 0 if the KDF operation is successful.
+ * \return BAD_FUNC_ARG if the input parameters are invalid.
+ * \return negative error code if the KDF operation fails.
+ */
 int wc_KDA_KDF_twostep(const byte* z, word32 zSz, const byte* fixedInfo,
                        word32 fixedInfoSz, word32 derivedSecretSz,
                        enum wc_AlgoType algoType, byte* output,
@@ -1499,5 +1516,112 @@ int wc_KDA_KDF_twostep(const byte* z, word32 zSz, const byte* fixedInfo,
     return ret;
 }
 #endif /* WC_KDF_NIST_SP_800_56C */
+
+#ifdef WC_KDF_NIST_SP_800_108
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/cmac.h>
+/**
+ * \brief Performs the KDF PRF as specified in
+ * SP800-108r1. At the moment, only Counter Mode (section 4.1) is
+ * implemented.
+ *
+ * \param [in]  Kin       The input keying material.
+ * \param [in]  KinSz     The size of the input keying material.
+ * \param [in]  fixedInfo The fixed information to be included in the KDF.
+ * \param [in]  fixedInfo Sz The size of the fixed information.
+ * \param [in]  KeySz     The desired size of the derived key.
+ * \param [out] Kout      The output keying material.
+ * \param [in]  KoutSz    The size of the output buffer.
+ *
+ * \return 0 if the KDF operation is successful.
+ * \return BAD_FUNC_ARG if the input parameters are invalid.
+ * \return negative error code if the KDF operation fails.
+ */
+int wc_KDA_KDF_PRF_cmac(const byte* Kin, word32 KinSz,
+                        const byte* fixedInfo, word32 fixedInfoSz,
+                        word32 KeySz, byte* Kout, word32 KoutSz)
+{
+    word32 len_rem = KeySz;
+    word32 tag_len = 0;
+    word32 counter = 0;
+    Cmac   cmac[1];
+    byte   counterBuf[4];
+    int    ret = -1;
+
+    /* screen out bad args. */
+    if (Kin == NULL || fixedInfo == NULL || Kout == NULL) {
+        return BAD_FUNC_ARG;
+    }
+
+    if (KeySz == 0 || KeySz < KoutSz || KeySz < WC_AES_BLOCK_SIZE) {
+        return BAD_FUNC_ARG;
+    }
+
+    if (fixedInfoSz == 0) {
+        return BAD_FUNC_ARG;
+    }
+
+    ret = wc_InitCmac(cmac, Kin, KinSz, WC_CMAC_AES, NULL);
+    if (ret == 0) {
+        while (len_rem > WC_AES_BLOCK_SIZE) {
+            c32toa(counter, counterBuf);
+            /* cmac in place in block size increments */
+            ret = wc_CmacUpdate(cmac, counterBuf, sizeof(counterBuf));
+            if (ret) {
+                break;
+            }
+
+            ret = wc_CmacUpdate(cmac, fixedInfo, fixedInfoSz);
+            if (ret) {
+                break;
+            }
+
+            ret = wc_CmacFinal(cmac, &Kout[KeySz - len_rem], &tag_len);
+            if (ret) {
+                break;
+            }
+
+            if (tag_len != WC_AES_BLOCK_SIZE) {
+                WOLFSSL_MSG_EX("wc_KDA_KDF_PRF_cmac: got %d, expected %d\n",
+                               tag_len, WC_AES_BLOCK_SIZE);
+                ret = -1;
+                break;
+            }
+
+            len_rem -= WC_AES_BLOCK_SIZE;
+            ++counter;
+        }
+
+        if (ret == 0 && len_rem) {
+            /* cmac the last little bit that wouldn't fit in a block size. */
+            byte rem[WC_AES_BLOCK_SIZE];
+            ret = wc_CmacUpdate(cmac, counterBuf, sizeof(counterBuf));
+
+            if (ret == 0) {
+                ret = wc_CmacUpdate(cmac, fixedInfo, fixedInfoSz);
+            }
+
+            if (ret == 0) {
+                ret = wc_CmacFinal(cmac, rem, &tag_len);
+
+                if (tag_len != WC_AES_BLOCK_SIZE) {
+                    WOLFSSL_MSG_EX("wc_KDA_KDF_PRF_cmac: got %d, expected %d\n",
+                                   tag_len, WC_AES_BLOCK_SIZE);
+                    ret = -1;
+                }
+            }
+
+            if (ret == 0) {
+                XMEMCPY(&Kout[KeySz - len_rem], rem, len_rem);
+
+                len_rem -= len_rem;
+                ++counter;
+            }
+        }
+    }
+
+    return ret;
+}
+#endif /* WC_KDF_NIST_SP_800_108 */
 
 #endif /* NO_KDF */
