@@ -1467,6 +1467,69 @@ static WOLFSSL_TEST_SUBROUTINE wc_test_ret_t nist_sp80056c_kdf_test(void)
 }
 #endif /* WC_KDF_NIST_SP_800_56C */
 
+/*
+ * example vectors from:
+ *   "SP 800-108 Key Derivation Using Pseudorandom Functions - Key-Based"
+ *   - https://csrc.nist.rip/groups/STM/cavp/key-derivation.html
+ *   - CounterMode/KDFCTR_gen.txt
+ *
+ * [PRF=CMAC_AES128]
+ * [CTRLOCATION=BEFORE_FIXED]
+ * [RLEN=32_BITS]
+ *
+ * COUNT=0
+ * */
+
+#if defined(WC_KDF_NIST_SP_800_108)
+static WOLFSSL_TEST_SUBROUTINE wc_test_ret_t nist_sp800108_kdf_test(void)
+{
+    int ret = -1;
+    /*
+     * [PRF=CMAC_AES128]
+     * [CTRLOCATION=BEFORE_FIXED]
+     * [RLEN=32_BITS]
+     *
+     * COUNT=0
+     * L = 128
+     * */
+    byte   Kin[16] =       {0xc1, 0x0b, 0x15, 0x2e, 0x8c, 0x97, 0xb7, 0x7e,
+                            0x18, 0x70, 0x4e, 0x0f, 0x0b, 0xd3, 0x83, 0x05};
+    byte   fixedInfo[60] = {0x98, 0xcd, 0x4c, 0xbb, 0xbe, 0xbe, 0x15, 0xd1,
+                            0x7d, 0xc8, 0x6e, 0x6d, 0xba, 0xd8, 0x00, 0xa2,
+                            0xdc, 0xbd, 0x64, 0xf7, 0xc7, 0xad, 0x0e, 0x78,
+                            0xe9, 0xcf, 0x94, 0xff, 0xdb, 0xa8, 0x9d, 0x03,
+                            0xe9, 0x7e, 0xad, 0xf6, 0xc4, 0xf7, 0xb8, 0x06,
+                            0xca, 0xf5, 0x2a, 0xa3, 0x8f, 0x09, 0xd0, 0xeb,
+                            0x71, 0xd7, 0x1f, 0x49, 0x7b, 0xcc, 0x69, 0x06,
+                            0xb4, 0x8d, 0x36, 0xc4};
+    byte   Kout[16] =      {0x26, 0xfa, 0xf6, 0x19, 0x08, 0xad, 0x9e, 0xe8,
+                            0x81, 0xb8, 0x30, 0x5c, 0x22, 0x1d, 0xb5, 0x3f};
+    byte   test_Kout[16];
+    word32 fixedInfoSz = sizeof(fixedInfo);
+    word32 KeySz = sizeof(Kout);
+    word32 KinSz = sizeof(Kin);
+    word32 KoutSz = sizeof(Kout);
+    int    n_diff = 0;
+
+    XMEMSET(test_Kout, 0, sizeof(test_Kout));
+    ret = wc_KDA_KDF_PRF_cmac(Kin, KinSz, fixedInfo, fixedInfoSz,
+                              KeySz, Kout, KoutSz);
+
+    n_diff = XMEMCMP(Kout, test_Kout, sizeof(test_Kout));
+    if (n_diff) {
+        WOLFSSL_MSG_EX("error: nist_sp800108_kdf_test: %d",
+                       n_diff);
+        ret = -1;
+    }
+    else {
+        ret = 0;
+    }
+
+    return ret;
+}
+
+#endif /* WC_KDF_NIST_SP_800_108 */
+
 /* optional macro to add sleep between tests */
 #ifndef TEST_SLEEP
 #define TEST_SLEEP() WC_DO_NOTHING
@@ -1984,6 +2047,13 @@ options: [-s max_relative_stack_bytes] [-m max_relative_heap_memory_bytes]\n\
     else
         TEST_PASS("NIST SP 800-56C KDF test passed!\n");
 #endif
+
+#if defined(WC_KDF_NIST_SP_800_108)
+    if ( (ret = nist_sp800108_kdf_test()) != 0)
+        TEST_FAIL("NIST SP 800-108 KDF test failed!\n", ret);
+    else
+        TEST_PASS("NIST SP 800-108 KDF test passed!\n");
+#endif /* WC_KDF_NIST_SP_800_108 */
 
 #if defined(HAVE_AESGCM) && defined(WOLFSSL_AES_128) && \
    !defined(WOLFSSL_AFALG_XILINX_AES) && !defined(WOLFSSL_XILINX_CRYPT) && \
