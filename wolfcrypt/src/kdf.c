@@ -1542,8 +1542,8 @@ int wc_KDA_KDF_PRF_cmac(const byte* Kin, word32 KinSz,
                         word32 KeySz, byte* Kout, word32 KoutSz)
 {
     word32 len_rem = KeySz;
-    word32 tag_len = 0;
-    word32 counter = 0;
+    word32 tag_len = WC_AES_BLOCK_SIZE;
+    word32 counter = 1;
     Cmac   cmac[1];
     byte   counterBuf[4];
     int    ret = -1;
@@ -1595,6 +1595,7 @@ int wc_KDA_KDF_PRF_cmac(const byte* Kin, word32 KinSz,
         if (ret == 0 && len_rem) {
             /* cmac the last little bit that wouldn't fit in a block size. */
             byte rem[WC_AES_BLOCK_SIZE];
+            c32toa(counter, counterBuf);
             ret = wc_CmacUpdate(cmac, counterBuf, sizeof(counterBuf));
 
             if (ret == 0) {

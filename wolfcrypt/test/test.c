@@ -1513,10 +1513,20 @@ static WOLFSSL_TEST_SUBROUTINE wc_test_ret_t nist_sp800108_kdf_test(void)
 
     XMEMSET(test_Kout, 0, sizeof(test_Kout));
     ret = wc_KDA_KDF_PRF_cmac(Kin, KinSz, fixedInfo, fixedInfoSz,
-                              KeySz, Kout, KoutSz);
+                              KeySz, test_Kout, KoutSz);
 
     n_diff = XMEMCMP(Kout, test_Kout, sizeof(test_Kout));
     if (n_diff) {
+        printf("\n");
+        for (size_t i = 0; i < 16; ++i) {
+            printf("0x%02x, ", Kout[i]);
+        }
+
+        printf("\n");
+        for (size_t i = 0; i < 16; ++i) {
+            printf("0x%02x, ", test_Kout[i]);
+        }
+        printf("\n");
         WOLFSSL_MSG_EX("error: nist_sp800108_kdf_test: %d",
                        n_diff);
         ret = -1;
