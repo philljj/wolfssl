@@ -26,6 +26,12 @@
 #include <sys/module.h>
 #include <sys/kernel.h>
 
+#if defined(BSDKM_CRYPTO_REGISTER)
+    #include <opencrypto/cryptodev.h>
+    #include <sys/bus.h>
+    #include "cryptodev_if.h"
+#endif
+
 /* wolf includes */
 #include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 #ifdef WOLFCRYPT_ONLY
@@ -175,11 +181,143 @@ wolfkmod_event(struct module * m, int what, void * arg)
     return ret;
 }
 
+#if defined(BSDKM_CRYPTO_REGISTER)
+/* libwolf device driver software context. */
+struct libwolf_softc {
+    int32_t driver_id;
+};
+
+struct libwolf_session {
+    int32_t driver_id;
+    int32_t todo_placeholder;
+};
+
+static void libwolf_identify(driver_t * driver, device_t parent)
+{
+    (void)driver;
+
+    /* don't double add libwolf child. */
+    if (device_find_child(parent, "libwolf", -1) != NULL) {
+        return;
+    }
+
+    BUS_ADD_CHILD(parent, 10, "libwolf", -1);
+}
+
+static int libwolf_probe(device_t dev)
+{
+    device_set_desc(dev, "wolfSSL crypto");
+    return (BUS_PROBE_DEFAULT);
+}
+
+static int libwolf_attach(device_t dev)
+{
+    struct libwolf_softc * softc = NULL;
+    int flags = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_SYNC;
+
+    softc = device_get_softc(dev);
+
+    softc->driver_id = crypto_get_driverid(dev, sizeof(struct libwolf_session),
+                                           flags);
+    if (softc->driver_id < 0) {
+        printf("error: libwolf: crypto_get_driverid failed: %d\n",
+               softc->driver_id);
+        return (ENXIO);
+    }
+
+    return (0);
+}
+
+static int libwolf_detach(device_t dev)
+{
+    struct libwolf_softc * softc = NULL;
+
+    softc = device_get_softc(dev);
+    if (softc->driver_id > 0) {
+        crypto_unregister_all(softc->driver_id);
+        softc->driver_id = 0;
+    }
+
+    return (0);
+}
+
+static int libwolf_probesession(device_t dev,
+                                const struct crypto_session_params *csp)
+{
+    struct libwolf_softc * softc = NULL;
+
+    softc = device_get_softc(dev);
+
+    (void)softc;
+    (void)csp;
+    return (EINVAL);
+}
+
+static int libwolf_newsession(device_t dev, crypto_session_t cses,
+                              const struct crypto_session_params *csp)
+{
+    struct libwolf_session * session = NULL;
+    int error = 0;
+
+    session = crypto_get_driver_session(cses);
+    (void)dev;
+    (void)cses;
+    (void)csp;
+    (void)session;
+
+    return error;
+}
+
+static int libwolf_process(device_t dev, struct cryptop *crp, int hint)
+{
+    const struct crypto_session_params *csp;
+    struct libwolf_session * session;
+    int error = 0;
+
+    session = crypto_get_driver_session(crp->crp_session);
+    csp = crypto_get_params(crp->crp_session);
+
+    (void)dev;
+    (void)hint;
+    (void)csp;
+    (void)session;
+
+    return error;
+}
+
+/* libwolf device driver */
+static device_method_t libwolf_methods[] = {
+    /* device interface methods */
+    DEVMETHOD(device_identify, libwolf_identify),
+    DEVMETHOD(device_probe, libwolf_probe),
+    DEVMETHOD(device_attach, libwolf_attach),
+    DEVMETHOD(device_detach, libwolf_detach),
+
+    /* crypto device methods */
+    DEVMETHOD(cryptodev_probesession, libwolf_probesession),
+    DEVMETHOD(cryptodev_newsession, libwolf_newsession),
+    DEVMETHOD(cryptodev_process, libwolf_process),
+
+    DEVMETHOD_END
+};
+
+static driver_t libwolf_driver = {
+    .name = "libwolf",
+    .methods = libwolf_methods,
+    .size = sizeof(struct libwolf_softc),
+};
+#endif /* BSDKM_CRYPTO_REGISTER */
+
 static moduledata_t libwolfmod = {
     "libwolfssl",   /* module name */
     wolfkmod_event, /* module event handler */
     NULL            /* extra data, unused */
 };
+
+#if defined(BSDKM_CRYPTO_REGISTER)
+/* note: on x86, software-only drivers usually attach to nexus bus. */
+DRIVER_MODULE(libwolfssl, nexus, libwolf_driver, NULL, NULL);
+#endif /* BSDKM_CRYPTO_REGISTER */
 
 MODULE_VERSION(libwolfssl, 1);
 DECLARE_MODULE(libwolfssl, libwolfmod, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
