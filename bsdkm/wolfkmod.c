@@ -692,13 +692,10 @@ static int wolfkdriv_gcm_work(device_t dev, wolfkdriv_session_t * session,
 {
     struct crypto_buffer_cursor cc_in;
     struct crypto_buffer_cursor cc_out;
-    const unsigned char * in_block = NULL;
     const unsigned char * in_seg = NULL;
-    unsigned char *       out_block = NULL;
     unsigned char *       out_seg = NULL;
     Aes *   aes = NULL;
     uint8_t iv[WC_AES_BLOCK_SIZE];
-    uint8_t block[EALG_MAX_BLOCK_LEN];
     uint8_t tag[WC_AES_BLOCK_SIZE];
     size_t  data_len = 0;
     size_t  seg_len = 0;
@@ -737,9 +734,11 @@ static int wolfkdriv_gcm_work(device_t dev, wolfkdriv_session_t * session,
         goto gcm_work_out;
     }
 
-    /* process aad first */
+    /*
+     * process aad first
+     */
     if (crp->crp_aad != NULL) {
-        /* they passed it by buffer. */
+        /* they passed it in separate buffer. */
         if (is_encrypt) {
             error = wc_AesGcmEncryptUpdate(aes, NULL, NULL, 0,
                                            crp->crp_aad, crp->crp_aad_length);
@@ -754,15 +753,15 @@ static int wolfkdriv_gcm_work(device_t dev, wolfkdriv_session_t * session,
         }
     }
     else {
-        size_t alen = 0;
+        /* we need to pull aad out of crp->crp_buf from crp_aad_start. */
+        size_t aad_len = 0;
 
         crypto_cursor_init(&cc_in, &crp->crp_buf);
         crypto_cursor_advance(&cc_in, crp->crp_aad_start);
 
-        for (alen = crp->crp_aad_length; alen > 0;
-            alen -= seg_len) {
+        for (aad_len = crp->crp_aad_length; aad_len > 0; aad_len -= seg_len) {
             in_seg = crypto_cursor_segment(&cc_in, &in_len);
-            seg_len = MIN(alen, in_len);
+            seg_len = MIN(aad_len, in_len);
 
             if (is_encrypt) {
                 error = wc_AesGcmEncryptUpdate(aes, NULL, NULL, 0,
@@ -775,18 +774,85 @@ static int wolfkdriv_gcm_work(device_t dev, wolfkdriv_session_t * session,
 
             if (error) {
                 error = EINVAL;
-                break;
+                goto gcm_work_out;
             }
 
             crypto_cursor_advance(&cc_in, seg_len);
         }
     }
 
+    /*
+     * process cipher/plaintext next
+     */
+
+    /* set up the crypto buffers */
+    crypto_cursor_init(&cc_in, &crp->crp_buf);
+    crypto_cursor_advance(&cc_in, crp->crp_payload_start);
+
+    in_seg = crypto_cursor_segment(&cc_in, &in_len);
+
+    /* handle if the user supplied a separate out buffer. */
+    if (CRYPTO_HAS_OUTPUT_BUFFER(crp)) {
+        crypto_cursor_init(&cc_out, &crp->crp_obuf);
+        crypto_cursor_advance(&cc_out, crp->crp_payload_output_start);
+    }
+    else {
+        cc_out = cc_in;
+    }
+
+    out_seg = crypto_cursor_segment(&cc_out, &out_len);
+
+    while (data_len) {
+        /* process through the available segments. */
+        in_seg = crypto_cursor_segment(&cc_in, &in_len);
+        out_seg = crypto_cursor_segment(&cc_out, &out_len);
+        seg_len = MIN(data_len, MIN(in_len, out_len));
+
+        if (is_encrypt) {
+            error = wc_AesGcmEncryptUpdate(aes, out_seg, in_seg, seg_len,
+                                           NULL, 0);
+            if (error) {
+                device_printf(dev, "error: wc_AesGcmEncrypt: %d\n", error);
+                goto gcm_work_out;
+            }
+        }
+        else {
+            error = wc_AesGcmDecryptUpdate(aes, out_seg, in_seg, seg_len,
+                                           NULL, 0);
+            if (error) {
+                device_printf(dev, "error: wc_AesGcmEncrypt: %d\n", error);
+                goto gcm_work_out;
+            }
+        }
+
+        /* advance the cursors by amount processed */
+        crypto_cursor_advance(&cc_in, seg_len);
+        crypto_cursor_advance(&cc_out, seg_len);
+
+        data_len -= seg_len;
+    }
+
+    /*
+     * process auth tag finally
+     */
+
+    if (is_encrypt) {
+        error = wc_AesGcmEncryptFinal(aes, tag, WC_AES_BLOCK_SIZE);
+        if (error == 0) {
+            crypto_copyback(crp, crp->crp_digest_start, WC_AES_BLOCK_SIZE, tag);
+        }
+    }
+    else {
+        crypto_copydata(crp, crp->crp_digest_start, WC_AES_BLOCK_SIZE, tag);
+        error = wc_AesGcmDecryptFinal(aes, tag, WC_AES_BLOCK_SIZE);
+        if (error) {
+            error = EBADMSG;
+        }
+    }
 
 gcm_work_out:
     /* cleanup. */
     wc_ForceZero(iv, sizeof(iv));
-    wc_ForceZero(block, sizeof(block));
     wc_ForceZero(tag, sizeof(tag));
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
