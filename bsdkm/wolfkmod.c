@@ -45,6 +45,7 @@
 
 MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 
+#if !defined(BSDKM_CRYPTO_REGISTER)
 static int wolfkmod_init(void);
 static int wolfkmod_cleanup(void);
 static int wolfkmod_load(void);
@@ -180,6 +181,7 @@ wolfkmod_event(struct module * m, int what, void * arg)
 
     return ret;
 }
+#endif /* !BSDKM_CRYPTO_REGISTER */
 
 #if defined(BSDKM_CRYPTO_REGISTER)
 /* libwolf device driver software context. */
@@ -306,19 +308,20 @@ static driver_t libwolf_driver = {
     .methods = libwolf_methods,
     .size = sizeof(struct libwolf_softc),
 };
+
+/* note: on x86, software-only drivers usually attach to nexus bus. */
+DRIVER_MODULE(libwolfssl, nexus, libwolf_driver, NULL, NULL);
 #endif /* BSDKM_CRYPTO_REGISTER */
 
+#if !defined(BSDKM_CRYPTO_REGISTER)
 static moduledata_t libwolfmod = {
     "libwolfssl",   /* module name */
     wolfkmod_event, /* module event handler */
     NULL            /* extra data, unused */
 };
 
-#if defined(BSDKM_CRYPTO_REGISTER)
-/* note: on x86, software-only drivers usually attach to nexus bus. */
-DRIVER_MODULE(libwolfssl, nexus, libwolf_driver, NULL, NULL);
-#endif /* BSDKM_CRYPTO_REGISTER */
+DECLARE_MODULE(libwolfssl, libwolfmod, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
+#endif /* !BSDKM_CRYPTO_REGISTER */
 
 MODULE_VERSION(libwolfssl, 1);
-DECLARE_MODULE(libwolfssl, libwolfmod, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
 #endif /* WOLFSSL_BSDKM */
