@@ -43,11 +43,11 @@
     #include <wolfcrypt/test/test.h>
 #endif
 
-#if defined(BSDKM_CRYPTO_REGISTER)
-    #include <wolfssl/wolfcrypt/aes.h>
-#endif
-
 MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
+
+#if defined(BSDKM_CRYPTO_REGISTER)
+    #include "bsdkm/wolfkmod_aes.c"
+#endif
 
 /* common functions. */
 static int  wolfkmod_init(void);
@@ -254,12 +254,27 @@ static int wolfkdriv_probe(device_t dev)
     return (BUS_PROBE_DEFAULT);
 }
 
+/*
+ * unregister libwolfssl crypto driver
+ */
+static void wolfkdriv_unregister(struct wolfkdriv_softc * softc)
+{
+    if (softc && softc->crid >= 0) {
+        crypto_unregister_all(softc->crid);
+        printf("info: wolfkdriv crid unregistered: %d\n", softc->crid);
+        softc->crid = -1;
+    }
+
+    return;
+}
+
 static int wolfkdriv_attach(device_t dev)
 {
     struct wolfkdriv_softc * softc = NULL;
     int flags = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_SYNC;
     int ret = 0;
     int crid = 0;
+    int error = 0;
 
     ret = wolfkmod_init();
     if (ret != 0) {
@@ -292,9 +307,16 @@ static int wolfkdriv_attach(device_t dev)
     if (crid != softc->crid) {
         printf("error: wolfkdriv: attach: got crid %d, expected %d\n", crid,
                softc->crid);
-        crypto_unregister_all(softc->crid);
-        softc->crid = 0;
-        return (ENXIO);
+        error = ENXIO;
+        goto attach_out;
+    }
+
+    error = wolfkdriv_test_aes(crid);
+
+    if (error) {
+        printf("error: wolfkdriv: attach: test_aes: %d\n", error);
+        error = ENXIO;
+        goto attach_out;
     }
 
     printf("info: wolfkdriv driver loaded: %d\n", crid);
@@ -303,7 +325,13 @@ static int wolfkdriv_attach(device_t dev)
     printf("info: wolfkdriv: exiting attach\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
-    return (0);
+attach_out:
+    if (error) {
+        wolfkdriv_unregister(softc);
+        error = ENXIO;
+    }
+
+    return (error);
 }
 
 static int wolfkdriv_detach(device_t dev)
@@ -317,11 +345,7 @@ static int wolfkdriv_detach(device_t dev)
         /* unregister wolfcrypt algs */
         softc = device_get_softc(dev);
 
-        if (softc->crid > 0) {
-            crypto_unregister_all(softc->crid);
-            printf("info: wolfkdriv driver unloaded: %d\n", softc->crid);
-            softc->crid = 0;
-        }
+        wolfkdriv_unregister(softc);
     }
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
