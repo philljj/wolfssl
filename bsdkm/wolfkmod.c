@@ -176,8 +176,8 @@ wolfkmod_event(struct module * m, int what, void * arg)
 #endif /* !BSDKM_CRYPTO_REGISTER */
 
 #if defined(BSDKM_CRYPTO_REGISTER)
-/* libwolf device driver software context. */
-struct libwolf_softc {
+/* wolfkdriv device driver software context. */
+struct wolfkdriv_softc {
     int32_t driver_id;
 };
 
@@ -188,13 +188,15 @@ struct km_aes_ctx {
 
 typedef struct km_aes_ctx km_aes_ctx;
 
-struct libwolf_session {
+struct wolfkdriv_session {
     km_aes_ctx aes_ctx;
     int32_t    driver_id;
     int        type;
     int        ivlen;
     int        klen;
 };
+
+typedef struct wolfkdriv_session wolfkdriv_session;
 
 static void km_AesFree(Aes * * aes) {
     if ((! aes) || (! *aes)) {
@@ -208,7 +210,7 @@ static void km_AesFree(Aes * * aes) {
     *aes = NULL;
 }
 
-static void libwolf_aes_ctx_reset(km_aes_ctx * ctx)
+static void wolfkdriv_aes_ctx_reset(km_aes_ctx * ctx)
 {
     if (ctx != NULL) {
         if (ctx->aes_encrypt) {
@@ -220,15 +222,15 @@ static void libwolf_aes_ctx_reset(km_aes_ctx * ctx)
     }
 
     #ifdef WOLFKM_DEBUG_AES
-    pr_info("info: exiting km_AesExitCommon\n");
+    printf("info: exiting km_AesExitCommon\n");
     #endif /* WOLFKM_DEBUG_AES */
 }
 
-static void libwolf_identify(driver_t * driver, device_t parent)
+static void wolfkdriv_identify(driver_t * driver, device_t parent)
 {
     (void)driver;
 
-    /* don't double add libwolf child. */
+    /* don't double add wolfkdriv child. */
     if (device_find_child(parent, "libwolf", -1) != NULL) {
         return;
     }
@@ -236,15 +238,15 @@ static void libwolf_identify(driver_t * driver, device_t parent)
     BUS_ADD_CHILD(parent, 10, "libwolf", -1);
 }
 
-static int libwolf_probe(device_t dev)
+static int wolfkdriv_probe(device_t dev)
 {
     device_set_desc(dev, "wolfSSL crypto");
     return (BUS_PROBE_DEFAULT);
 }
 
-static int libwolf_attach(device_t dev)
+static int wolfkdriv_attach(device_t dev)
 {
-    struct libwolf_softc * softc = NULL;
+    struct wolfkdriv_softc * softc = NULL;
     int flags = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_SYNC;
     int ret = 0;
 
@@ -255,22 +257,26 @@ static int libwolf_attach(device_t dev)
 
     softc = device_get_softc(dev);
 
-    softc->driver_id = crypto_get_driverid(dev, sizeof(struct libwolf_session),
+    softc->driver_id = crypto_get_driverid(dev, sizeof(wolfkdriv_session),
                                            flags);
     if (softc->driver_id < 0) {
-        printf("error: libwolf: crypto_get_driverid failed: %d\n",
+        printf("error: wolfkdriv: crypto_get_driverid failed: %d\n",
                softc->driver_id);
         return (ENXIO);
     }
 
-    printf("info: libwolf driver loaded\n");
+    printf("info: wolfkdriv driver loaded\n");
+
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting attach\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return (0);
 }
 
-static int libwolf_detach(device_t dev)
+static int wolfkdriv_detach(device_t dev)
 {
-    struct libwolf_softc * softc = NULL;
+    struct wolfkdriv_softc * softc = NULL;
     int ret = 0;
 
     ret = wolfkmod_cleanup();
@@ -286,26 +292,33 @@ static int libwolf_detach(device_t dev)
     }
 
     if (ret == 0) {
-        printf("info: libwolf driver unloaded\n");
+        printf("info: wolfkdriv driver unloaded\n");
     }
+
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting detach\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return (0);
 }
 
-static int libwolf_probesession(device_t dev,
+static int wolfkdriv_probesession(device_t dev,
                                 const struct crypto_session_params *csp)
 {
-    struct libwolf_softc * softc = NULL;
+    struct wolfkdriv_softc * softc = NULL;
 
     softc = device_get_softc(dev);
 
     (void)softc;
     (void)csp;
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting probesession\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
     return (EINVAL);
 }
 
-static int libwolf_newsession_aead(struct libwolf_session * session,
-                                   const struct crypto_session_params *csp)
+static int wolfkdriv_newsession_aead(wolfkdriv_session * session,
+                                     const struct crypto_session_params *csp)
 {
     int error = 0;
     int klen = csp->csp_cipher_klen * 8; /* key len in bytes */
@@ -317,7 +330,7 @@ static int libwolf_newsession_aead(struct libwolf_session * session,
     session->type = CRYPTO_AES_NIST_GCM_16;
 
     if (klen != 16 && klen != 24 && klen != 32) {
-        printf("info: libwolf: newsession_aead: invalid klen: %d\n", klen);
+        printf("info: wolfkdriv: newsession_aead: invalid klen: %d\n", klen);
         return (EINVAL);
     }
 
@@ -329,7 +342,7 @@ static int libwolf_newsession_aead(struct libwolf_session * session,
 
     if (session->aes_ctx.aes_encrypt == NULL) {
         error = ENOMEM;
-        printf("error: libwolf: newsession_aead: aes_encrypt alloc failed\n");
+        printf("error: wolfkdriv: newsession_aead: alloc failed\n");
         goto newsession_aead_out;
     }
 
@@ -338,30 +351,30 @@ static int libwolf_newsession_aead(struct libwolf_session * session,
 newsession_aead_out:
 
     if (error != 0) {
-        libwolf_aes_ctx_reset(&session->aes_ctx);
+        wolfkdriv_aes_ctx_reset(&session->aes_ctx);
     }
 
     return (error);
 }
 
-static int libwolf_newsession(device_t dev, crypto_session_t cses,
+static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
                               const struct crypto_session_params *csp)
 {
-    struct libwolf_session * session = NULL;
+    wolfkdriv_session * session = NULL;
     int error = 0;
 
-    /* get the libwolf_session context */
+    /* get the wolfkdriv_session context */
     session = crypto_get_driver_session(cses);
 
     switch (csp->csp_mode) {
     case CSP_MODE_DIGEST:
     case CSP_MODE_CIPHER:
     case CSP_MODE_ETA:
-        printf("info: libwolf: not supported: %d\n", csp->csp_mode);
+        printf("info: wolfkdriv: not supported: %d\n", csp->csp_mode);
         error = EOPNOTSUPP;
         break;
     case CSP_MODE_AEAD:
-        error = libwolf_newsession_aead(session, csp);
+        error = wolfkdriv_newsession_aead(session, csp);
         break;
     default:
         __assert_unreachable();
@@ -370,8 +383,12 @@ static int libwolf_newsession(device_t dev, crypto_session_t cses,
     (void)dev;
 
     if (error) {
-        printf("error: libwolf: newsession: %d\n", error);
+        printf("error: wolfkdriv: newsession: %d\n", error);
     }
+
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting newsession\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     //return (error);
     return (0);
@@ -381,23 +398,27 @@ static int libwolf_newsession(device_t dev, crypto_session_t cses,
  *
  */
 static void
-libwolf_freesession(device_t dev, crypto_session_t cses)
+wolfkdriv_freesession(device_t dev, crypto_session_t cses)
 {
-    struct libwolf_session * session = NULL;
+    wolfkdriv_session * session = NULL;
+    (void)dev;
 
-    /* get the libwolf_session context */
+    /* get the wolfkdriv_session context */
     session = crypto_get_driver_session(cses);
 
-    libwolf_aes_ctx_reset(&session->aes_ctx);
+    /* clean it up */
+    wolfkdriv_aes_ctx_reset(&session->aes_ctx);
 
-    (void)dev;
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting freesession\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
     return;
 }
 
-static int libwolf_process(device_t dev, struct cryptop *crp, int hint)
+static int wolfkdriv_process(device_t dev, struct cryptop *crp, int hint)
 {
     const struct crypto_session_params *csp;
-    struct libwolf_session * session = NULL;
+    wolfkdriv_session * session = NULL;
     int error = 0;
 
     session = crypto_get_driver_session(crp->crp_session);
@@ -408,34 +429,39 @@ static int libwolf_process(device_t dev, struct cryptop *crp, int hint)
     (void)csp;
     (void)session;
 
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: exiting process\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+
     return error;
 }
 
-/* libwolf device driver */
-static device_method_t libwolf_methods[] = {
-    /* device interface methods */
-    DEVMETHOD(device_identify, libwolf_identify),
-    DEVMETHOD(device_probe, libwolf_probe),
-    DEVMETHOD(device_attach, libwolf_attach),
-    DEVMETHOD(device_detach, libwolf_detach),
+/* wolfkdriv device driver */
+static device_method_t wolfkdriv_methods[] = {
+    /* device interface methods: called during device setup, etc. */
+    DEVMETHOD(device_identify, wolfkdriv_identify),
+    DEVMETHOD(device_probe, wolfkdriv_probe),
+    DEVMETHOD(device_attach, wolfkdriv_attach),
+    DEVMETHOD(device_detach, wolfkdriv_detach),
 
-    /* crypto device methods */
-    DEVMETHOD(cryptodev_probesession, libwolf_probesession),
-    DEVMETHOD(cryptodev_newsession, libwolf_newsession),
-    DEVMETHOD(cryptodev_freesession, libwolf_freesession),
-    DEVMETHOD(cryptodev_process, libwolf_process),
+    /* crypto device session methods: called during crypto session setup,
+     * work, etc. */
+    DEVMETHOD(cryptodev_probesession, wolfkdriv_probesession),
+    DEVMETHOD(cryptodev_newsession, wolfkdriv_newsession),
+    DEVMETHOD(cryptodev_freesession, wolfkdriv_freesession),
+    DEVMETHOD(cryptodev_process, wolfkdriv_process),
 
     DEVMETHOD_END
 };
 
-static driver_t libwolf_driver = {
+static driver_t wolfkdriv_driver = {
     .name = "libwolf",
-    .methods = libwolf_methods,
-    .size = sizeof(struct libwolf_softc),
+    .methods = wolfkdriv_methods,
+    .size = sizeof(struct wolfkdriv_softc),
 };
 
 /* note: on x86, software-only drivers usually attach to nexus bus. */
-DRIVER_MODULE(libwolfssl, nexus, libwolf_driver, NULL, NULL);
+DRIVER_MODULE(libwolfssl, nexus, wolfkdriv_driver, NULL, NULL);
 #endif /* BSDKM_CRYPTO_REGISTER */
 
 #if !defined(BSDKM_CRYPTO_REGISTER)
