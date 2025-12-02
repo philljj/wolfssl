@@ -53,11 +53,11 @@ MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 static int  wolfkmod_init(void);
 static int  wolfkmod_cleanup(void);
 #if !defined(BSDKM_CRYPTO_REGISTER)
-/* specific to a pure kernel module library. */
+/* functions specific to a pure kernel module library build. */
 static int  wolfkmod_load(void);
 static int  wolfkmod_unload(void);
 #else
-/* specific to a kernel driver module. */
+/* functions specific to a kernel crypto driver module build. */
 static void wolfkdriv_identify(driver_t * driver, device_t parent);
 static int  wolfkdriv_probe(device_t dev);
 static int  wolfkdriv_attach(device_t dev);
@@ -99,11 +99,6 @@ static int wolfkmod_init(void)
     printf("info: wolfCrypt self-test passed.\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
     #endif /* NO_CRYPT_TEST */
-
-    /**
-     * todo: register wolfcrypt algs here with crypto_get_driverid
-     * and related.
-     * */
 
     return (0);
 }
@@ -193,7 +188,7 @@ wolfkmod_event(struct module * m, int what, void * arg)
 #if defined(BSDKM_CRYPTO_REGISTER)
 /* wolfkdriv device driver software context. */
 struct wolfkdriv_softc {
-    int32_t driver_id;
+    int32_t crid;
 };
 
 struct km_aes_ctx {
@@ -205,7 +200,7 @@ typedef struct km_aes_ctx km_aes_ctx;
 
 struct wolfkdriv_session {
     km_aes_ctx aes_ctx;
-    int32_t    driver_id;
+    int32_t    crid;
     int        type;
     int        ivlen;
     int        klen;
@@ -264,23 +259,45 @@ static int wolfkdriv_attach(device_t dev)
     struct wolfkdriv_softc * softc = NULL;
     int flags = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_SYNC;
     int ret = 0;
+    int crid = 0;
 
     ret = wolfkmod_init();
     if (ret != 0) {
         return (ECANCELED);
     }
 
+    /**
+     * register wolfcrypt algs here with crypto_get_driverid.
+     *
+     * The crid is the literal index into the kernel crypto_drivers array:
+     *   - crid >= 0 is valid.
+     *   - crid <  0 is error.
+     * */
     softc = device_get_softc(dev);
-
-    softc->driver_id = crypto_get_driverid(dev, sizeof(wolfkdriv_session_t),
+    softc->crid = crypto_get_driverid(dev, sizeof(wolfkdriv_session_t),
                                            flags);
-    if (softc->driver_id < 0) {
+    if (softc->crid < 0) {
         printf("error: wolfkdriv: crypto_get_driverid failed: %d\n",
-               softc->driver_id);
+               softc->crid);
         return (ENXIO);
     }
 
-    printf("info: wolfkdriv driver loaded\n");
+    /*
+     * various sanity checks
+     */
+
+    /* 1. we should find ourself by name */
+    crid = crypto_find_driver("libwolf");
+
+    if (crid != softc->crid) {
+        printf("error: wolfkdriv: attach: got crid %d, expected %d\n", crid,
+               softc->crid);
+        crypto_unregister_all(softc->crid);
+        softc->crid = 0;
+        return (ENXIO);
+    }
+
+    printf("info: wolfkdriv driver loaded: %d\n", crid);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     printf("info: wolfkdriv: exiting attach\n");
@@ -300,14 +317,11 @@ static int wolfkdriv_detach(device_t dev)
         /* unregister wolfcrypt algs */
         softc = device_get_softc(dev);
 
-        if (softc->driver_id > 0) {
-            crypto_unregister_all(softc->driver_id);
-            softc->driver_id = 0;
+        if (softc->crid > 0) {
+            crypto_unregister_all(softc->crid);
+            printf("info: wolfkdriv driver unloaded: %d\n", softc->crid);
+            softc->crid = 0;
         }
-    }
-
-    if (ret == 0) {
-        printf("info: wolfkdriv driver unloaded\n");
     }
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
@@ -451,7 +465,9 @@ static int wolfkdriv_process(device_t dev, struct cryptop *crp, int hint)
     return error;
 }
 
-/* wolfkdriv device driver */
+/*
+ * wolfkmod as a crypto device driver.
+ */
 static device_method_t wolfkdriv_methods[] = {
     /* device interface methods: called during device setup, etc. */
     DEVMETHOD(device_identify, wolfkdriv_identify),
@@ -480,6 +496,9 @@ DRIVER_MODULE(libwolfssl, nexus, wolfkdriv_driver, NULL, NULL);
 #endif /* BSDKM_CRYPTO_REGISTER */
 
 #if !defined(BSDKM_CRYPTO_REGISTER)
+/*
+ * wolfkmod as a pure kernel module.
+ */
 static moduledata_t libwolfmod = {
     "libwolfssl",   /* module name */
     wolfkmod_event, /* module event handler */
