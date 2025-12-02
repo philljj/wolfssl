@@ -26,6 +26,12 @@
 #include <sys/module.h>
 #include <sys/kernel.h>
 
+#if defined(BSDKM_CRYPTO_REGISTER)
+    #include <opencrypto/cryptodev.h>
+    #include <sys/bus.h>
+    #include "cryptodev_if.h"
+#endif
+
 /* wolf includes */
 #include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 #ifdef WOLFCRYPT_ONLY
@@ -37,12 +43,14 @@
     #include <wolfcrypt/test/test.h>
 #endif
 
+#if defined(BSDKM_CRYPTO_REGISTER)
+    #include <wolfssl/wolfcrypt/aes.h>
+#endif
+
 MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 
 static int wolfkmod_init(void);
 static int wolfkmod_cleanup(void);
-static int wolfkmod_load(void);
-static int wolfkmod_unload(void);
 
 static int wolfkmod_init(void)
 {
@@ -61,6 +69,23 @@ static int wolfkmod_init(void)
         return (ECANCELED);
     }
     #endif
+
+    #ifndef NO_CRYPT_TEST
+    ret = wolfcrypt_test(NULL);
+    if (ret != 0) {
+        printf("error: wolfcrypt test failed with return code: %d\n", ret);
+        (void)wolfkmod_cleanup();
+        return (ECANCELED);
+    }
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfCrypt self-test passed.\n");
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+    #endif /* NO_CRYPT_TEST */
+
+    /**
+     * todo: register wolfcrypt algs here with crypto_get_driverid
+     * and related.
+     * */
 
     return (0);
 }
@@ -90,6 +115,10 @@ static int wolfkmod_cleanup(void)
     return (0);
 }
 
+#if !defined(BSDKM_CRYPTO_REGISTER)
+static int wolfkmod_load(void);
+static int wolfkmod_unload(void);
+
 static int wolfkmod_load(void)
 {
     int ret = 0;
@@ -98,23 +127,6 @@ static int wolfkmod_load(void)
     if (ret != 0) {
         return (ECANCELED);
     }
-
-    #ifndef NO_CRYPT_TEST
-    ret = wolfcrypt_test(NULL);
-    if (ret != 0) {
-        printf("error: wolfcrypt test failed with return code: %d\n", ret);
-        (void)wolfkmod_cleanup();
-        return (ECANCELED);
-    }
-    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfCrypt self-test passed.\n");
-    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
-    #endif /* NO_CRYPT_TEST */
-
-    /**
-     * todo: register wolfcrypt algs here with crypto_get_driverid
-     * and related.
-     * */
 
     printf("info: libwolfssl loaded\n");
 
@@ -126,11 +138,6 @@ static int wolfkmod_unload(void)
     int ret = 0;
 
     ret = wolfkmod_cleanup();
-
-    /**
-     * todo: unregister wolfcrypt algs here with crypto_unregister_all
-     * and related.
-     * */
 
     if (ret == 0) {
         printf("info: libwolfssl unloaded\n");
@@ -166,13 +173,226 @@ wolfkmod_event(struct module * m, int what, void * arg)
 
     return (ret);
 }
+#endif /* !BSDKM_CRYPTO_REGISTER */
 
+#if defined(BSDKM_CRYPTO_REGISTER)
+/* libwolf device driver software context. */
+struct libwolf_softc {
+    int32_t driver_id;
+};
+
+struct km_AesCtx {
+    Aes  * aes_encrypt;
+    Aes  * aes_decrypt;
+};
+
+struct libwolf_session {
+    int32_t          driver_id;
+    int              type;
+    int              ivlen;
+    int              klen;
+    struct km_AesCtx aes_ctx;
+};
+
+static void libwolf_identify(driver_t * driver, device_t parent)
+{
+    (void)driver;
+
+    /* don't double add libwolf child. */
+    if (device_find_child(parent, "libwolf", -1) != NULL) {
+        return;
+    }
+
+    BUS_ADD_CHILD(parent, 10, "libwolf", -1);
+}
+
+static int libwolf_probe(device_t dev)
+{
+    device_set_desc(dev, "wolfSSL crypto");
+    return (BUS_PROBE_DEFAULT);
+}
+
+static int libwolf_attach(device_t dev)
+{
+    struct libwolf_softc * softc = NULL;
+    int flags = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_SYNC;
+    int ret = 0;
+
+    ret = wolfkmod_init();
+    if (ret != 0) {
+        return (ECANCELED);
+    }
+
+    softc = device_get_softc(dev);
+
+    softc->driver_id = crypto_get_driverid(dev, sizeof(struct libwolf_session),
+                                           flags);
+    if (softc->driver_id < 0) {
+        printf("error: libwolf: crypto_get_driverid failed: %d\n",
+               softc->driver_id);
+        return (ENXIO);
+    }
+
+    printf("info: libwolf driver loaded\n");
+
+    return (0);
+}
+
+static int libwolf_detach(device_t dev)
+{
+    struct libwolf_softc * softc = NULL;
+    int ret = 0;
+
+    ret = wolfkmod_cleanup();
+
+    if (ret == 0) {
+        /* unregister wolfcrypt algs */
+        softc = device_get_softc(dev);
+
+        if (softc->driver_id > 0) {
+            crypto_unregister_all(softc->driver_id);
+            softc->driver_id = 0;
+        }
+    }
+
+    if (ret == 0) {
+        printf("info: libwolf driver unloaded\n");
+    }
+
+    return (0);
+}
+
+static int libwolf_probesession(device_t dev,
+                                const struct crypto_session_params *csp)
+{
+    struct libwolf_softc * softc = NULL;
+
+    softc = device_get_softc(dev);
+
+    (void)softc;
+    (void)csp;
+    return (EINVAL);
+}
+
+static int libwolf_newsession_aead(struct libwolf_session * session,
+                                   const struct crypto_session_params *csp)
+{
+    int error = 0;
+    int klen = csp->csp_cipher_klen * 8; /* key len in bytes */
+
+    if (csp->csp_cipher_alg != CRYPTO_AES_NIST_GCM_16) {
+        return (EOPNOTSUPP);
+    }
+
+    session->type = CRYPTO_AES_NIST_GCM_16;
+
+    if (klen != 16 && klen != 24 && klen != 32) {
+        printf("info: libwolf: newsession_aead: invalid klen: %d\n", klen);
+        return (EINVAL);
+    }
+
+    session->klen = klen;
+    session->ivlen = csp->csp_ivlen;
+
+    session->aes_ctx.aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
+                                          DYNAMIC_TYPE_AES);
+
+    if (session->aes_ctx.aes_encrypt == NULL) {
+        error = ENOMEM;
+        goto newsession_aead_out;
+    }
+
+    error = wc_AesInit(session->aes_ctx.aes_encrypt, NULL, INVALID_DEVID);
+
+newsession_aead_out:
+
+    if (error != 0) {
+        //km_AesExitCommon(ctx);
+    }
+
+    return (error);
+}
+
+static int libwolf_newsession(device_t dev, crypto_session_t cses,
+                              const struct crypto_session_params *csp)
+{
+    struct libwolf_session * session = NULL;
+    int error = 0;
+
+    /* get the libwolf_session context */
+    session = crypto_get_driver_session(cses);
+
+    switch (csp->csp_mode) {
+    case CSP_MODE_DIGEST:
+    case CSP_MODE_CIPHER:
+    case CSP_MODE_ETA:
+        printf("info: libwolf: not supported: %d\n", csp->csp_mode);
+        error = EOPNOTSUPP;
+        break;
+    case CSP_MODE_AEAD:
+        error = libwolf_newsession_aead(session, csp);
+        break;
+    default:
+        __assert_unreachable();
+    }
+
+    (void)dev;
+
+    return (error);
+}
+
+static int libwolf_process(device_t dev, struct cryptop *crp, int hint)
+{
+    const struct crypto_session_params *csp;
+    struct libwolf_session * session;
+    int error = 0;
+
+    session = crypto_get_driver_session(crp->crp_session);
+    csp = crypto_get_params(crp->crp_session);
+
+    (void)dev;
+    (void)hint;
+    (void)csp;
+    (void)session;
+
+    return error;
+}
+
+/* libwolf device driver */
+static device_method_t libwolf_methods[] = {
+    /* device interface methods */
+    DEVMETHOD(device_identify, libwolf_identify),
+    DEVMETHOD(device_probe, libwolf_probe),
+    DEVMETHOD(device_attach, libwolf_attach),
+    DEVMETHOD(device_detach, libwolf_detach),
+
+    /* crypto device methods */
+    DEVMETHOD(cryptodev_probesession, libwolf_probesession),
+    DEVMETHOD(cryptodev_newsession, libwolf_newsession),
+    DEVMETHOD(cryptodev_process, libwolf_process),
+
+    DEVMETHOD_END
+};
+
+static driver_t libwolf_driver = {
+    .name = "libwolf",
+    .methods = libwolf_methods,
+    .size = sizeof(struct libwolf_softc),
+};
+
+/* note: on x86, software-only drivers usually attach to nexus bus. */
+DRIVER_MODULE(libwolfssl, nexus, libwolf_driver, NULL, NULL);
+#endif /* BSDKM_CRYPTO_REGISTER */
+
+#if !defined(BSDKM_CRYPTO_REGISTER)
 static moduledata_t libwolfmod = {
     "libwolfssl",   /* module name */
     wolfkmod_event, /* module event handler */
     NULL            /* extra data, unused */
 };
 
-MODULE_VERSION(libwolfssl, 1);
 DECLARE_MODULE(libwolfssl, libwolfmod, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
+#endif /* !BSDKM_CRYPTO_REGISTER */
+
+MODULE_VERSION(libwolfssl, 1);
 #endif /* WOLFSSL_BSDKM */
