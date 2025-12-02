@@ -181,18 +181,48 @@ struct libwolf_softc {
     int32_t driver_id;
 };
 
-struct km_AesCtx {
-    Aes  * aes_encrypt;
-    Aes  * aes_decrypt;
+struct km_aes_ctx {
+    Aes * aes_encrypt;
+    Aes * aes_decrypt;
 };
 
+typedef struct km_aes_ctx km_aes_ctx;
+
 struct libwolf_session {
-    int32_t          driver_id;
-    int              type;
-    int              ivlen;
-    int              klen;
-    struct km_AesCtx aes_ctx;
+    km_aes_ctx aes_ctx;
+    int32_t    driver_id;
+    int        type;
+    int        ivlen;
+    int        klen;
 };
+
+static void km_AesFree(Aes * * aes) {
+    if ((! aes) || (! *aes)) {
+        return;
+    }
+    wc_AesFree(*aes);
+    #if defined(HAVE_FIPS) && FIPS_VERSION3_LT(6,0,0)
+    ForceZero(*aes, sizeof(**aes));
+    #endif
+    XFREE(*aes, NULL, DYNAMIC_TYPE_AES);
+    *aes = NULL;
+}
+
+static void libwolf_aes_ctx_reset(km_aes_ctx * ctx)
+{
+    if (ctx != NULL) {
+        if (ctx->aes_encrypt) {
+            km_AesFree(&ctx->aes_encrypt);
+        }
+        if (ctx->aes_decrypt) {
+            km_AesFree(&ctx->aes_decrypt);
+        }
+    }
+
+    #ifdef WOLFKM_DEBUG_AES
+    pr_info("info: exiting km_AesExitCommon\n");
+    #endif /* WOLFKM_DEBUG_AES */
+}
 
 static void libwolf_identify(driver_t * driver, device_t parent)
 {
@@ -299,6 +329,7 @@ static int libwolf_newsession_aead(struct libwolf_session * session,
 
     if (session->aes_ctx.aes_encrypt == NULL) {
         error = ENOMEM;
+        printf("error: libwolf: newsession_aead: aes_encrypt alloc failed\n");
         goto newsession_aead_out;
     }
 
@@ -307,7 +338,7 @@ static int libwolf_newsession_aead(struct libwolf_session * session,
 newsession_aead_out:
 
     if (error != 0) {
-        //km_AesExitCommon(ctx);
+        libwolf_aes_ctx_reset(&session->aes_ctx);
     }
 
     return (error);
@@ -338,13 +369,35 @@ static int libwolf_newsession(device_t dev, crypto_session_t cses,
 
     (void)dev;
 
-    return (error);
+    if (error) {
+        printf("error: libwolf: newsession: %d\n", error);
+    }
+
+    //return (error);
+    return (0);
+}
+
+/*
+ *
+ */
+static void
+libwolf_freesession(device_t dev, crypto_session_t cses)
+{
+    struct libwolf_session * session = NULL;
+
+    /* get the libwolf_session context */
+    session = crypto_get_driver_session(cses);
+
+    libwolf_aes_ctx_reset(&session->aes_ctx);
+
+    (void)dev;
+    return;
 }
 
 static int libwolf_process(device_t dev, struct cryptop *crp, int hint)
 {
     const struct crypto_session_params *csp;
-    struct libwolf_session * session;
+    struct libwolf_session * session = NULL;
     int error = 0;
 
     session = crypto_get_driver_session(crp->crp_session);
@@ -369,6 +422,7 @@ static device_method_t libwolf_methods[] = {
     /* crypto device methods */
     DEVMETHOD(cryptodev_probesession, libwolf_probesession),
     DEVMETHOD(cryptodev_newsession, libwolf_newsession),
+    DEVMETHOD(cryptodev_freesession, libwolf_freesession),
     DEVMETHOD(cryptodev_process, libwolf_process),
 
     DEVMETHOD_END
