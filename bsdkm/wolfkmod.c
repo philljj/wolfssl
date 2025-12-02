@@ -49,8 +49,26 @@
 
 MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 
-static int wolfkmod_init(void);
-static int wolfkmod_cleanup(void);
+/* common functions. */
+static int  wolfkmod_init(void);
+static int  wolfkmod_cleanup(void);
+#if !defined(BSDKM_CRYPTO_REGISTER)
+/* specific to a pure kernel module library. */
+static int  wolfkmod_load(void);
+static int  wolfkmod_unload(void);
+#else
+/* specific to a kernel driver module. */
+static void wolfkdriv_identify(driver_t * driver, device_t parent);
+static int  wolfkdriv_probe(device_t dev);
+static int  wolfkdriv_attach(device_t dev);
+static int  wolfkdriv_detach(device_t dev);
+static int  wolfkdriv_probesession(device_t dev,
+                                   const struct crypto_session_params *csp);
+static int  wolfkdriv_newsession(device_t dev, crypto_session_t cses,
+                                 const struct crypto_session_params *csp);
+static void wolfkdriv_freesession(device_t dev, crypto_session_t cses);
+static int  wolfkdriv_process(device_t dev, struct cryptop *crp, int hint);
+#endif /* !BSDKM_CRYPTO_REGISTER */
 
 static int wolfkmod_init(void)
 {
@@ -116,9 +134,6 @@ static int wolfkmod_cleanup(void)
 }
 
 #if !defined(BSDKM_CRYPTO_REGISTER)
-static int wolfkmod_load(void);
-static int wolfkmod_unload(void);
-
 static int wolfkmod_load(void)
 {
     int ret = 0;
@@ -196,7 +211,7 @@ struct wolfkdriv_session {
     int        klen;
 };
 
-typedef struct wolfkdriv_session wolfkdriv_session;
+typedef struct wolfkdriv_session wolfkdriv_session_t;
 
 static void km_AesFree(Aes * * aes) {
     if ((! aes) || (! *aes)) {
@@ -257,7 +272,7 @@ static int wolfkdriv_attach(device_t dev)
 
     softc = device_get_softc(dev);
 
-    softc->driver_id = crypto_get_driverid(dev, sizeof(wolfkdriv_session),
+    softc->driver_id = crypto_get_driverid(dev, sizeof(wolfkdriv_session_t),
                                            flags);
     if (softc->driver_id < 0) {
         printf("error: wolfkdriv: crypto_get_driverid failed: %d\n",
@@ -317,7 +332,7 @@ static int wolfkdriv_probesession(device_t dev,
     return (EINVAL);
 }
 
-static int wolfkdriv_newsession_aead(wolfkdriv_session * session,
+static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
                                      const struct crypto_session_params *csp)
 {
     int error = 0;
@@ -360,10 +375,10 @@ newsession_aead_out:
 static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
                               const struct crypto_session_params *csp)
 {
-    wolfkdriv_session * session = NULL;
+    wolfkdriv_session_t * session = NULL;
     int error = 0;
 
-    /* get the wolfkdriv_session context */
+    /* get the wolfkdriv_session_t context */
     session = crypto_get_driver_session(cses);
 
     switch (csp->csp_mode) {
@@ -400,10 +415,10 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
 static void
 wolfkdriv_freesession(device_t dev, crypto_session_t cses)
 {
-    wolfkdriv_session * session = NULL;
+    wolfkdriv_session_t * session = NULL;
     (void)dev;
 
-    /* get the wolfkdriv_session context */
+    /* get the wolfkdriv_session_t context */
     session = crypto_get_driver_session(cses);
 
     /* clean it up */
@@ -418,7 +433,7 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
 static int wolfkdriv_process(device_t dev, struct cryptop *crp, int hint)
 {
     const struct crypto_session_params *csp;
-    wolfkdriv_session * session = NULL;
+    wolfkdriv_session_t * session = NULL;
     int error = 0;
 
     session = crypto_get_driver_session(crp->crp_session);
