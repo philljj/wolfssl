@@ -20,6 +20,16 @@ static int wolfkdriv_test_aes(int crid)
 
     error = crypto_newsession(&session, &csp, crid);
 
+    if (error || session == NULL) {
+        goto test_aes_out;
+    }
+
+test_aes_out:
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    printf("info: wolfkdriv: test_aes: error=%d, session=%p\n",
+           error, (void *)session);
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+
     if (session != NULL) {
         crypto_freesession(session);
         session = NULL;

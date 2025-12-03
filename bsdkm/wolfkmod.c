@@ -320,7 +320,7 @@ static int wolfkdriv_attach(device_t dev)
         goto attach_out;
     }
 
-    printf("info: wolfkdriv driver loaded: %d\n", crid);
+    printf("info: wolfkdriv: driver loaded: %d\n", crid);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     printf("info: wolfkdriv: exiting attach\n");
