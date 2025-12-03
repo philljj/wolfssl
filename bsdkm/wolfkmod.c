@@ -311,6 +311,7 @@ static int wolfkdriv_attach(device_t dev)
         goto attach_out;
     }
 
+    /* 2. test various algs */
     error = wolfkdriv_test_aes(crid);
 
     if (error) {
@@ -367,7 +368,7 @@ static int wolfkdriv_probesession(device_t dev,
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     printf("info: wolfkdriv: exiting probesession\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
-    return (EINVAL);
+    return (CRYPTODEV_PROBE_ACCEL_SOFTWARE);
 }
 
 static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
@@ -440,6 +441,7 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
     }
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    device_printf(dev, "info: wolfkdriv: exiting newsession\n");
     printf("info: wolfkdriv: exiting newsession\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
