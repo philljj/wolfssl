@@ -375,7 +375,7 @@ static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
                                      const struct crypto_session_params *csp)
 {
     int error = 0;
-    int klen = csp->csp_cipher_klen * 8; /* key len in bytes */
+    int klen = csp->csp_cipher_klen; /* key len in bytes */
 
     if (csp->csp_cipher_alg != CRYPTO_AES_NIST_GCM_16) {
         return (EOPNOTSUPP);

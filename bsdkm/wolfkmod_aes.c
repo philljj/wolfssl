@@ -3,7 +3,7 @@
 
 static int wolfkdriv_test_aes(int crid)
 {
-    crypto_session_t * session = NULL;
+    crypto_session_t session = NULL;
     struct crypto_session_params csp;
     int error = 0;
     uint8_t key[16] = {0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
@@ -18,10 +18,10 @@ static int wolfkdriv_test_aes(int crid)
     csp.csp_cipher_key = key;
     csp.csp_cipher_klen = sizeof(key);
 
-    error = crypto_newsession(session, &csp, crid);
+    error = crypto_newsession(&session, &csp, crid);
 
     if (session != NULL) {
-        crypto_freesession(*session);
+        crypto_freesession(session);
         session = NULL;
     }
 
