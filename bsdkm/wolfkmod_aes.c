@@ -11,7 +11,7 @@ wolfkdriv_test_crp_callback(struct cryptop * crp)
     return (0);
 }
 
-static int wolfkdriv_test_aes(int crid)
+static int wolfkdriv_test_aes(device_t dev, int crid)
 {
     crypto_session_t session = NULL;
     struct crypto_session_params csp;
@@ -36,7 +36,7 @@ static int wolfkdriv_test_aes(int crid)
 
     crp = crypto_getreq(session, M_WAITOK);
     if (crp == NULL) {
-        printf("error: wolfkdriv: test_aes: crypto_getreq failed\n");
+        device_printf(dev, "error: test_aes: crypto_getreq failed\n");
         goto test_aes_out;
     }
 
@@ -45,8 +45,8 @@ static int wolfkdriv_test_aes(int crid)
     error = crypto_dispatch(crp);
 test_aes_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: test_aes: error=%d, session=%p, crp=%p\n",
-           error, (void *)session, (void*)crp);
+    device_printf(dev, "info: test_aes: error=%d, session=%p, crp=%p\n",
+                  error, (void *)session, (void*)crp);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     if (crp != NULL) {

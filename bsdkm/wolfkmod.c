@@ -188,7 +188,8 @@ wolfkmod_event(struct module * m, int what, void * arg)
 #if defined(BSDKM_CRYPTO_REGISTER)
 /* wolfkdriv device driver software context. */
 struct wolfkdriv_softc {
-    int32_t crid;
+    int32_t  crid;
+    device_t dev;
 };
 
 struct km_aes_ctx {
@@ -261,7 +262,7 @@ static void wolfkdriv_unregister(struct wolfkdriv_softc * softc)
 {
     if (softc && softc->crid >= 0) {
         crypto_unregister_all(softc->crid);
-        printf("info: wolfkdriv crid unregistered: %d\n", softc->crid);
+        device_printf(softc->dev, "info: crid unregistered: %d\n", softc->crid);
         softc->crid = -1;
     }
 
@@ -289,10 +290,12 @@ static int wolfkdriv_attach(device_t dev)
      *   - crid <  0 is error.
      * */
     softc = device_get_softc(dev);
+    softc->dev = dev;
+
     softc->crid = crypto_get_driverid(dev, sizeof(wolfkdriv_session_t),
                                            flags);
     if (softc->crid < 0) {
-        printf("error: wolfkdriv: crypto_get_driverid failed: %d\n",
+        device_printf(dev, "error: crypto_get_driverid failed: %d\n",
                softc->crid);
         return (ENXIO);
     }
@@ -305,25 +308,25 @@ static int wolfkdriv_attach(device_t dev)
     crid = crypto_find_driver("libwolf");
 
     if (crid != softc->crid) {
-        printf("error: wolfkdriv: attach: got crid %d, expected %d\n", crid,
+        device_printf(dev, "error: attach: got crid %d, expected %d\n", crid,
                softc->crid);
         error = ENXIO;
         goto attach_out;
     }
 
     /* 2. test various algs */
-    error = wolfkdriv_test_aes(crid);
+    error = wolfkdriv_test_aes(dev, crid);
 
     if (error) {
-        printf("error: wolfkdriv: attach: test_aes: %d\n", error);
+        device_printf(dev, "error: attach: test_aes: %d\n", error);
         error = ENXIO;
         goto attach_out;
     }
 
-    printf("info: wolfkdriv: driver loaded: %d\n", crid);
+    device_printf(dev, "info: driver loaded: %d\n", crid);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: exiting attach\n");
+    device_printf(dev, "info: exiting attach\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
 attach_out:
@@ -345,33 +348,55 @@ static int wolfkdriv_detach(device_t dev)
     if (ret == 0) {
         /* unregister wolfcrypt algs */
         softc = device_get_softc(dev);
-
         wolfkdriv_unregister(softc);
     }
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: exiting detach\n");
+    device_printf(dev, "info: exiting detach\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return (0);
 }
 
 static int wolfkdriv_probesession(device_t dev,
-                                const struct crypto_session_params *csp)
+                                  const struct crypto_session_params *csp)
 {
     struct wolfkdriv_softc * softc = NULL;
+    int error = CRYPTODEV_PROBE_ACCEL_SOFTWARE;
 
     softc = device_get_softc(dev);
 
+    switch (csp->csp_mode) {
+    case CSP_MODE_AEAD:
+        switch (csp->csp_cipher_alg) {
+        case CRYPTO_AES_NIST_GCM_16:
+            break;
+        default:
+            device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
+            error = EINVAL;
+            break;
+        }
+        break;
+    case CSP_MODE_DIGEST:
+    case CSP_MODE_CIPHER:
+    case CSP_MODE_ETA:
+    default:
+        device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
+        error = EINVAL;
+        break;
+    }
+
     (void)softc;
     (void)csp;
+
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: exiting probesession\n");
+    device_printf(dev, "info: exiting probesession\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
-    return (CRYPTODEV_PROBE_ACCEL_SOFTWARE);
+    return (error);
 }
 
-static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
+static int wolfkdriv_newsession_aead(device_t dev,
+                                     wolfkdriv_session_t * session,
                                      const struct crypto_session_params *csp)
 {
     int error = 0;
@@ -384,7 +409,7 @@ static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
     session->type = CRYPTO_AES_NIST_GCM_16;
 
     if (klen != 16 && klen != 24 && klen != 32) {
-        printf("info: wolfkdriv: newsession_aead: invalid klen: %d\n", klen);
+        device_printf(dev, "info: newsession_aead: invalid klen: %d\n", klen);
         return (EINVAL);
     }
 
@@ -396,7 +421,7 @@ static int wolfkdriv_newsession_aead(wolfkdriv_session_t * session,
 
     if (session->aes_ctx.aes_encrypt == NULL) {
         error = ENOMEM;
-        printf("error: wolfkdriv: newsession_aead: alloc failed\n");
+        device_printf(dev, "error: newsession_aead: alloc failed\n");
         goto newsession_aead_out;
     }
 
@@ -424,11 +449,11 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
     case CSP_MODE_DIGEST:
     case CSP_MODE_CIPHER:
     case CSP_MODE_ETA:
-        printf("info: wolfkdriv: not supported: %d\n", csp->csp_mode);
+        device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
         error = EOPNOTSUPP;
         break;
     case CSP_MODE_AEAD:
-        error = wolfkdriv_newsession_aead(session, csp);
+        error = wolfkdriv_newsession_aead(dev, session, csp);
         break;
     default:
         __assert_unreachable();
@@ -437,12 +462,11 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
     (void)dev;
 
     if (error) {
-        printf("error: wolfkdriv: newsession: %d\n", error);
+        device_printf(dev, "error: newsession: %d\n", error);
     }
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    device_printf(dev, "info: wolfkdriv: exiting newsession\n");
-    printf("info: wolfkdriv: exiting newsession\n");
+    device_printf(dev, "info: exiting newsession\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     //return (error);
@@ -465,7 +489,7 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     wolfkdriv_aes_ctx_reset(&session->aes_ctx);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: exiting freesession\n");
+    device_printf(dev, "info: exiting freesession\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
     return;
 }
@@ -488,7 +512,7 @@ static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
     crypto_done(crp);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: process: error=%d\n", error);
+    device_printf(dev, "info: process: error=%d\n", error);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return error;
