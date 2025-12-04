@@ -367,6 +367,17 @@ static int wolfkdriv_probesession(device_t dev,
     softc = device_get_softc(dev);
 
     switch (csp->csp_mode) {
+    case CSP_MODE_CIPHER:
+        switch (csp->csp_cipher_alg) {
+        case CRYPTO_AES_CBC:
+            break;
+        default:
+            device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
+            error = EINVAL;
+            break;
+        }
+        break;
+
     case CSP_MODE_AEAD:
         switch (csp->csp_cipher_alg) {
         case CRYPTO_AES_NIST_GCM_16:
@@ -378,7 +389,6 @@ static int wolfkdriv_probesession(device_t dev,
         }
         break;
     case CSP_MODE_DIGEST:
-    case CSP_MODE_CIPHER:
     case CSP_MODE_ETA:
     default:
         device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
@@ -463,11 +473,11 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
 
     switch (csp->csp_mode) {
     case CSP_MODE_DIGEST:
-    case CSP_MODE_CIPHER:
     case CSP_MODE_ETA:
         device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
         error = EOPNOTSUPP;
         break;
+    case CSP_MODE_CIPHER:
     case CSP_MODE_AEAD:
         error = wolfkdriv_newsession_cipher(dev, session, csp);
         break;

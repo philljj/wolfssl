@@ -37,9 +37,9 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
     /* cbc */
     csp.csp_cipher_alg = CRYPTO_AES_CBC;
     csp.csp_mode = CSP_MODE_CIPHER;
-    csp.csp_ivlen = AES_GCM_IV_LEN;
+    csp.csp_ivlen = WC_AES_BLOCK_SIZE;
     csp.csp_cipher_key = key;
-    csp.csp_cipher_klen = sizeof(key);
+    csp.csp_cipher_klen = WC_AES_BLOCK_SIZE;
     error = crypto_newsession(&session, &csp, crid);
     if (error || session == NULL) {
         goto test_aes_out;
@@ -55,7 +55,7 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
     crp->crp_op = CRYPTO_OP_ENCRYPT;
     crp->crp_flags = CRYPTO_F_IV_SEPARATE;
 
-    memcpy(crp->crp_iv, iv, 16);
+    memcpy(crp->crp_iv, iv, WC_AES_BLOCK_SIZE);
     crypto_use_buf(crp, msg, sizeof(msg));
 
     error = crypto_dispatch(crp);
