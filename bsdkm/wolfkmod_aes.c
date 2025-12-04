@@ -1,11 +1,22 @@
 #if !defined(WC_SKIP_INCLUDED_C_FILES) && defined(BSDKM_CRYPTO_REGISTER)
 #include <wolfssl/wolfcrypt/aes.h>
 
+/*
+ * cryptodev framework always uses a callback, even when sync.
+ */
+static int
+wolfkdriv_test_crypto_callback(struct cryptop * crp)
+{
+    (void)crp;
+    return (0);
+}
+
 static int wolfkdriv_test_aes(int crid)
 {
     crypto_session_t session = NULL;
     struct crypto_session_params csp;
-    int error = 0;
+    struct cryptop * crp = NULL;
+    int    error = 0;
     uint8_t key[16] = {0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
                        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01};
 
@@ -24,11 +35,26 @@ static int wolfkdriv_test_aes(int crid)
         goto test_aes_out;
     }
 
+    crp = crypto_getreq(session, M_WAITOK);
+
+    crp->crp_callback = wolfkdriv_test_crypto_callback;
+
+    if (crp == NULL) {
+        printf("error: wolfkdriv: test_aes: crypto_getreq failed\n");
+        goto test_aes_out;
+    }
+
+    error = crypto_dispatch(crp);
 test_aes_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     printf("info: wolfkdriv: test_aes: error=%d, session=%p\n",
            error, (void *)session);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+
+    if (crp != NULL) {
+        crypto_freereq(crp);
+        crp = NULL;
+    }
 
     if (session != NULL) {
         crypto_freesession(session);

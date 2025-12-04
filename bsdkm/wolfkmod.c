@@ -470,9 +470,9 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     return;
 }
 
-static int wolfkdriv_process(device_t dev, struct cryptop *crp, int hint)
+static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
 {
-    const struct crypto_session_params *csp;
+    const struct crypto_session_params * csp = NULL;
     wolfkdriv_session_t * session = NULL;
     int error = 0;
 
@@ -484,8 +484,11 @@ static int wolfkdriv_process(device_t dev, struct cryptop *crp, int hint)
     (void)csp;
     (void)session;
 
+    crp->crp_etype = error;
+    crypto_done(crp);
+
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: exiting process\n");
+    printf("info: wolfkdriv: process: error=%d\n", error);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return error;
