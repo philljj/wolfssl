@@ -372,7 +372,6 @@ static int wolfkdriv_probesession(device_t dev,
         case CRYPTO_AES_CBC:
             break;
         default:
-            device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
             error = EINVAL;
             break;
         }
@@ -383,7 +382,6 @@ static int wolfkdriv_probesession(device_t dev,
         case CRYPTO_AES_NIST_GCM_16:
             break;
         default:
-            device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
             error = EINVAL;
             break;
         }
@@ -391,7 +389,6 @@ static int wolfkdriv_probesession(device_t dev,
     case CSP_MODE_DIGEST:
     case CSP_MODE_ETA:
     default:
-        device_printf(dev, "info: not supported: %d\n", csp->csp_mode);
         error = EINVAL;
         break;
     }
@@ -400,7 +397,8 @@ static int wolfkdriv_probesession(device_t dev,
     (void)csp;
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    device_printf(dev, "info: exiting probesession\n");
+    device_printf(dev, "info: probesession: mode=%d, cipher_alg=%d, error=%d\n",
+                  csp->csp_mode, csp->csp_cipher_alg, error);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
     return (error);
 }
