@@ -395,42 +395,58 @@ static int wolfkdriv_probesession(device_t dev,
     return (error);
 }
 
-static int wolfkdriv_newsession_aead(device_t dev,
-                                     wolfkdriv_session_t * session,
-                                     const struct crypto_session_params *csp)
+static int wolfkdriv_newsession_cipher(device_t dev,
+                                       wolfkdriv_session_t * session,
+                                       const struct crypto_session_params *csp)
 {
     int error = 0;
     int klen = csp->csp_cipher_klen; /* key len in bytes */
 
-    if (csp->csp_cipher_alg != CRYPTO_AES_NIST_GCM_16) {
+    switch (csp->csp_cipher_alg) {
+    case CRYPTO_AES_NIST_GCM_16:
+        session->type = CRYPTO_AES_NIST_GCM_16;
+        break;
+    case CRYPTO_AES_CBC:
+        session->type = CRYPTO_AES_CBC;
+        break;
+    default:
         return (EOPNOTSUPP);
     }
 
-    session->type = CRYPTO_AES_NIST_GCM_16;
-
     if (klen != 16 && klen != 24 && klen != 32) {
-        device_printf(dev, "info: newsession_aead: invalid klen: %d\n", klen);
+        device_printf(dev, "info: newsession_cipher: invalid klen: %d\n", klen);
         return (EINVAL);
     }
 
     session->klen = klen;
     session->ivlen = csp->csp_ivlen;
-
     session->aes_ctx.aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
                                           DYNAMIC_TYPE_AES);
 
     if (session->aes_ctx.aes_encrypt == NULL) {
         error = ENOMEM;
-        device_printf(dev, "error: newsession_aead: alloc failed\n");
-        goto newsession_aead_out;
+        device_printf(dev, "error: newsession_cipher: alloc failed\n");
+        goto newsession_cipher_out;
     }
 
     error = wc_AesInit(session->aes_ctx.aes_encrypt, NULL, INVALID_DEVID);
+    if (error) {
+        device_printf(dev, "error: newsession_cipher: aes init: %d\n", error);
+        goto newsession_cipher_out;
+    }
 
-newsession_aead_out:
+    error = wc_AesSetKey(session->aes_ctx.aes_encrypt, csp->csp_cipher_key,
+                         csp->csp_cipher_klen, NULL, AES_ENCRYPTION);
+    if (error) {
+        device_printf(dev, "error: newsession_cipher: aes setkey: %d\n", error);
+        goto newsession_cipher_out;
+    }
+
+newsession_cipher_out:
 
     if (error != 0) {
         wolfkdriv_aes_ctx_reset(&session->aes_ctx);
+        return (EINVAL);
     }
 
     return (error);
@@ -453,7 +469,7 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
         error = EOPNOTSUPP;
         break;
     case CSP_MODE_AEAD:
-        error = wolfkdriv_newsession_aead(dev, session, csp);
+        error = wolfkdriv_newsession_cipher(dev, session, csp);
         break;
     default:
         __assert_unreachable();
