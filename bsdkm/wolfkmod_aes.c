@@ -35,8 +35,8 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
     memset(&csp, 0, sizeof(csp));
 
     /* cbc */
-    csp.csp_cipher_alg = CRYPTO_AES_CBC;
     csp.csp_mode = CSP_MODE_CIPHER;
+    csp.csp_cipher_alg = CRYPTO_AES_CBC;
     csp.csp_ivlen = WC_AES_BLOCK_SIZE;
     csp.csp_cipher_key = key;
     csp.csp_cipher_klen = WC_AES_BLOCK_SIZE;

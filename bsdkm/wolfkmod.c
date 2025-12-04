@@ -520,6 +520,21 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     return;
 }
 
+static int wolfkdriv_cipher_work(device_t dev, wolfkdriv_session_t * session,
+                                 struct cryptop * crp,
+                                 const struct crypto_session_params * csp)
+{
+    int error = 0;
+    if (csp->csp_cipher_alg != CRYPTO_AES_CBC) {
+        error = EINVAL;
+    }
+
+    (void)dev;
+    (void)session;
+    (void)crp;
+    return (error);
+}
+
 static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
 {
     const struct crypto_session_params * csp = NULL;
@@ -531,17 +546,29 @@ static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
 
     (void)dev;
     (void)hint;
-    (void)csp;
-    (void)session;
+
+    switch (csp->csp_mode) {
+    case CSP_MODE_CIPHER:
+        error = wolfkdriv_cipher_work(dev, session, crp, csp);
+        break;
+    case CSP_MODE_DIGEST:
+    case CSP_MODE_ETA:
+    case CSP_MODE_AEAD:
+        error = EINVAL;
+        break;
+    default:
+        __assert_unreachable();
+    }
 
     crp->crp_etype = error;
     crypto_done(crp);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    device_printf(dev, "info: process: error=%d\n", error);
+    device_printf(dev, "info: process: mode=%d, cipher_alg=%d, error=%d\n",
+                  csp->csp_mode, csp->csp_cipher_alg, error);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
-    return error;
+    return (error);
 }
 
 /*
