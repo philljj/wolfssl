@@ -5,7 +5,7 @@
  * cryptodev framework always uses a callback, even when sync.
  */
 static int
-wolfkdriv_test_crypto_callback(struct cryptop * crp)
+wolfkdriv_test_crp_callback(struct cryptop * crp)
 {
     (void)crp;
     return (0);
@@ -37,7 +37,7 @@ static int wolfkdriv_test_aes(int crid)
 
     crp = crypto_getreq(session, M_WAITOK);
 
-    crp->crp_callback = wolfkdriv_test_crypto_callback;
+    crp->crp_callback = wolfkdriv_test_crp_callback;
 
     if (crp == NULL) {
         printf("error: wolfkdriv: test_aes: crypto_getreq failed\n");
@@ -47,8 +47,8 @@ static int wolfkdriv_test_aes(int crid)
     error = crypto_dispatch(crp);
 test_aes_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    printf("info: wolfkdriv: test_aes: error=%d, session=%p\n",
-           error, (void *)session);
+    printf("info: wolfkdriv: test_aes: error=%d, session=%p, crp=%p\n",
+           error, (void *)session, (void*)crp);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     if (crp != NULL) {
