@@ -30,19 +30,17 @@ static int wolfkdriv_test_aes(int crid)
     csp.csp_cipher_klen = sizeof(key);
 
     error = crypto_newsession(&session, &csp, crid);
-
     if (error || session == NULL) {
         goto test_aes_out;
     }
 
     crp = crypto_getreq(session, M_WAITOK);
-
-    crp->crp_callback = wolfkdriv_test_crp_callback;
-
     if (crp == NULL) {
         printf("error: wolfkdriv: test_aes: crypto_getreq failed\n");
         goto test_aes_out;
     }
+
+    crp->crp_callback = wolfkdriv_test_crp_callback;
 
     error = crypto_dispatch(crp);
 test_aes_out:
