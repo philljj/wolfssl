@@ -465,7 +465,7 @@ newsession_cipher_out:
 }
 
 static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
-                              const struct crypto_session_params *csp)
+                                const struct crypto_session_params *csp)
 {
     wolfkdriv_session_t * session = NULL;
     int error = 0;
@@ -487,18 +487,12 @@ static int wolfkdriv_newsession(device_t dev, crypto_session_t cses,
         __assert_unreachable();
     }
 
-    (void)dev;
-
-    if (error) {
-        device_printf(dev, "error: newsession: %d\n", error);
-    }
-
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    device_printf(dev, "info: exiting newsession\n");
+    device_printf(dev, "info: newsession: mode=%d, cipher_alg=%d, error=%d\n",
+                  csp->csp_mode, csp->csp_cipher_alg, error);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
-    //return (error);
-    return (0);
+    return (error);
 }
 
 /*
@@ -609,7 +603,6 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
             device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
             goto cbc_work_out;
         }
-        wolfkmod_print_data("out: ", out_block, seg_len);
 
         if (out_block == block) {
             /* we used the block as local output buffer. copy to cc_out,
@@ -656,12 +649,10 @@ static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
     const struct crypto_session_params * csp = NULL;
     wolfkdriv_session_t * session = NULL;
     int error = 0;
+    (void)hint;
 
     session = crypto_get_driver_session(crp->crp_session);
     csp = crypto_get_params(crp->crp_session);
-
-    (void)dev;
-    (void)hint;
 
     switch (csp->csp_mode) {
     case CSP_MODE_CIPHER:
