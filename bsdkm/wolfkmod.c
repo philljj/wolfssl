@@ -613,7 +613,7 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
 
         if (out_block == block) {
             /* we used the block as local output buffer. copy to cc_out,
-             * and grab the next cursor segment. */
+             * and grab the next out cursor segment. */
             crypto_cursor_copyback(&cc_out, WC_AES_BLOCK_SIZE, block);
             out_seg = crypto_cursor_segment(&cc_out, &out_len);
         } else {
@@ -622,9 +622,12 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
             out_seg += seg_len;
             out_len -= seg_len;
         }
+
         if (in_block == block) {
+            /* grab a new in cursor segment. */
             in_seg = crypto_cursor_segment(&cc_in, &in_len);
         } else {
+            /* else advance existing in cursor. */
             crypto_cursor_advance(&cc_in, seg_len);
             in_seg += seg_len;
             in_len -= seg_len;
