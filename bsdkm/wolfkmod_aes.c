@@ -1,6 +1,24 @@
 #if !defined(WC_SKIP_INCLUDED_C_FILES) && defined(BSDKM_CRYPTO_REGISTER)
 #include <wolfssl/wolfcrypt/aes.h>
 
+#if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+static void
+wolfkmod_print_data(const char * what, const uint8_t * data, size_t data_len)
+{
+    size_t i = 0;
+
+    printf("%s:\n", what);
+    for (i = 0; i < data_len; ++i) {
+        printf("0x%02x, ", data[i]);
+        if ((i + 1) % 8) {
+            printf("\n");
+        }
+    }
+    printf("\n");
+}
+#endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+
+
 /*
  * cryptodev framework always uses a callback, even when sync.
  */
@@ -55,11 +73,20 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
     crp->crp_flags = CRYPTO_F_IV_SEPARATE;
 
     memcpy(crp->crp_iv, iv, WC_AES_BLOCK_SIZE);
+
     crypto_use_buf(crp, msg, sizeof(msg));
+    crp->crp_payload_start = 0;
+    crp->crp_payload_length = sizeof(msg);
 
     error = crypto_dispatch(crp);
 
-    (void)verify;
+    if (error) {
+        goto test_aes_out;
+    }
+
+    error = XMEMCMP(msg, verify, sizeof(verify));
+    wolfkmod_print_data("msg_enc", msg, sizeof(msg));
+
 test_aes_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     device_printf(dev, "info: test_aes: error=%d, session=%p, crp=%p\n",

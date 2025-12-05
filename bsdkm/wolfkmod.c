@@ -68,6 +68,10 @@ static int  wolfkdriv_newsession(device_t dev, crypto_session_t cses,
                                  const struct crypto_session_params *csp);
 static void wolfkdriv_freesession(device_t dev, crypto_session_t cses);
 static int  wolfkdriv_process(device_t dev, struct cryptop *crp, int hint);
+#if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+#endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
+static void wolfkmod_print_data(const char * what, const uint8_t * data,
+                                size_t data_len);
 #endif /* !BSDKM_CRYPTO_REGISTER */
 
 static int wolfkmod_init(void)
@@ -552,6 +556,11 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
     }
 
     crypto_read_iv(crp, iv);
+    error = wc_AesSetIV(aes, iv);
+    if (error) {
+        device_printf(dev, "error: wc_AesSetIV: %d\n", error);
+        goto cbc_work_out;
+    }
 
     /* set up the crypto buffers */
     crypto_cursor_init(&cc_in, &crp->crp_buf);
@@ -600,6 +609,7 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
             device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
             goto cbc_work_out;
         }
+        wolfkmod_print_data("out: ", out_block, seg_len);
 
         if (out_block == block) {
             /* we used the block as local output buffer. copy to cc_out,
@@ -627,6 +637,13 @@ cbc_work_out:
     /* cleanup. */
     wc_ForceZero(iv, sizeof(iv));
     wc_ForceZero(block, sizeof(block));
+
+    #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
+    device_printf(dev, "info: cbc_work: mode=%d, cipher_alg=%d, "
+                  "payload_length=%d, error=%d\n",
+                  csp->csp_mode, csp->csp_cipher_alg, crp->crp_payload_length,
+                  error);
+    #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
     return (error);
 }
