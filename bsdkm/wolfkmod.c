@@ -518,18 +518,116 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     return;
 }
 
-static int wolfkdriv_cipher_work(device_t dev, wolfkdriv_session_t * session,
-                                 struct cryptop * crp,
-                                 const struct crypto_session_params * csp)
+static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
+                              struct cryptop * crp,
+                              const struct crypto_session_params * csp)
 {
-    int error = 0;
+    struct crypto_buffer_cursor cc_in;
+    struct crypto_buffer_cursor cc_out;
+    const unsigned char * in_block = NULL;
+    const unsigned char * in_seg = NULL;
+    unsigned char *       out_block = NULL;
+    unsigned char *       out_seg = NULL;
+    Aes *   aes = NULL;
+    uint8_t iv[WC_AES_BLOCK_SIZE];
+    uint8_t block[EALG_MAX_BLOCK_LEN];
+    size_t  data_len = 0;
+    size_t  seg_len = 0;
+    size_t  in_len = 0;
+    size_t  out_len = 0;
+    int     error = 0;
+
     if (csp->csp_cipher_alg != CRYPTO_AES_CBC) {
         error = EINVAL;
+        goto cbc_work_out;
     }
 
-    (void)dev;
-    (void)session;
-    (void)crp;
+    aes = session->aes_ctx.aes_encrypt;
+    data_len = crp->crp_payload_length;
+
+    /* must be multiple of block size */
+    if (data_len % WC_AES_BLOCK_SIZE) {
+        error = EINVAL;
+        goto cbc_work_out;
+    }
+
+    crypto_read_iv(crp, iv);
+
+    /* set up the crypto buffers */
+    crypto_cursor_init(&cc_in, &crp->crp_buf);
+    crypto_cursor_advance(&cc_in, crp->crp_payload_start);
+
+    in_seg = crypto_cursor_segment(&cc_in, &in_len);
+
+    /* handle if the user supplied a separate out buffer. */
+    if (CRYPTO_HAS_OUTPUT_BUFFER(crp)) {
+        crypto_cursor_init(&cc_out, &crp->crp_obuf);
+        crypto_cursor_advance(&cc_out, crp->crp_payload_output_start);
+    }
+    else {
+        cc_out = cc_in;
+    }
+
+    out_seg = crypto_cursor_segment(&cc_out, &out_len);
+
+    while (data_len) {
+        /* set up input buffers */
+        if (in_len < WC_AES_BLOCK_SIZE) {
+            /* less than a block in segment */
+            crypto_cursor_copydata(&cc_in, WC_AES_BLOCK_SIZE, block);
+            in_block = block;
+            in_len = WC_AES_BLOCK_SIZE;
+        }
+        else {
+            in_block = in_seg;
+        }
+
+        /* set up output buffers */
+        if (out_len < WC_AES_BLOCK_SIZE) {
+            out_block = block;
+            out_len = WC_AES_BLOCK_SIZE;
+        }
+        else {
+            out_block = out_seg;
+        }
+
+        /* choose which of data_len, in_len, out_len, is shorter. */
+        seg_len = rounddown(MIN(data_len, MIN(in_len, out_len)),
+                           WC_AES_BLOCK_SIZE);
+
+        error = wc_AesCbcEncrypt(aes, out_block, in_block, seg_len);
+        if (error) {
+            device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
+            goto cbc_work_out;
+        }
+
+        if (out_block == block) {
+            /* we used the block as local output buffer. copy to cc_out,
+             * and grab the next cursor segment. */
+            crypto_cursor_copyback(&cc_out, WC_AES_BLOCK_SIZE, block);
+            out_seg = crypto_cursor_segment(&cc_out, &out_len);
+        } else {
+            /* we worked directly in cc_out. advance the cursor. */
+            crypto_cursor_advance(&cc_out, seg_len);
+            out_seg += seg_len;
+            out_len -= seg_len;
+        }
+        if (in_block == block) {
+            in_seg = crypto_cursor_segment(&cc_in, &in_len);
+        } else {
+            crypto_cursor_advance(&cc_in, seg_len);
+            in_seg += seg_len;
+            in_len -= seg_len;
+        }
+
+        data_len -= seg_len;
+    }
+
+cbc_work_out:
+    /* cleanup. */
+    wc_ForceZero(iv, sizeof(iv));
+    wc_ForceZero(block, sizeof(block));
+
     return (error);
 }
 
@@ -547,7 +645,7 @@ static int wolfkdriv_process(device_t dev, struct cryptop * crp, int hint)
 
     switch (csp->csp_mode) {
     case CSP_MODE_CIPHER:
-        error = wolfkdriv_cipher_work(dev, session, crp, csp);
+        error = wolfkdriv_cbc_work(dev, session, crp, csp);
         break;
     case CSP_MODE_DIGEST:
     case CSP_MODE_ETA:
