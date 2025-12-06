@@ -225,6 +225,45 @@ static void km_AesFree(Aes * * aes) {
     *aes = NULL;
 }
 
+static int wolfkdriv_aes_ctx_new(device_t dev, wolfkdriv_session_t * session,
+                                 int type)
+{
+    int error = 0;
+
+    /* allocate Aes struct if we haven't yet. */
+    if (type == AES_ENCRYPTION) {
+        if (session->aes_ctx.aes_encrypt == NULL) {
+            session->aes_ctx.aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
+                                                  DYNAMIC_TYPE_AES);
+        }
+    }
+    else {
+        if (session->aes_ctx.aes_decrypt == NULL) {
+            session->aes_ctx.aes_decrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
+                                                  DYNAMIC_TYPE_AES);
+        }
+    }
+
+    if (type == AES_ENCRYPTION) {
+        if (session->aes_ctx.aes_encrypt == NULL) {
+            error = ENOMEM;
+        }
+    }
+    else {
+        if (session->aes_ctx.aes_decrypt == NULL) {
+            error = ENOMEM;
+        }
+    }
+
+    if (error) {
+        device_printf(dev, "error: newsession_cipher: alloc failed\n");
+    }
+    #ifdef WOLFKM_DEBUG_AES
+    printf("info: exiting km_AesExitCommon\n");
+    #endif /* WOLFKM_DEBUG_AES */
+    return (error);
+}
+
 static void wolfkdriv_aes_ctx_reset(km_aes_ctx * ctx)
 {
     if (ctx != NULL) {
@@ -447,13 +486,6 @@ static int wolfkdriv_newsession_cipher(device_t dev,
         goto newsession_cipher_out;
     }
 
-    error = wc_AesSetKey(session->aes_ctx.aes_encrypt, csp->csp_cipher_key,
-                         csp->csp_cipher_klen, NULL, AES_ENCRYPTION);
-    if (error) {
-        device_printf(dev, "error: newsession_cipher: aes setkey: %d\n", error);
-        goto newsession_cipher_out;
-    }
-
 newsession_cipher_out:
 
     if (error != 0) {
@@ -516,6 +548,10 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     return;
 }
 
+/*
+ *
+ */
+
 static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
                               struct cryptop * crp,
                               const struct crypto_session_params * csp)
@@ -534,14 +570,25 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
     size_t  in_len = 0;
     size_t  out_len = 0;
     int     error = 0;
+    int     is_encrypt = 0;
+    int     type = AES_ENCRYPTION;
 
     if (csp->csp_cipher_alg != CRYPTO_AES_CBC) {
         error = EINVAL;
         goto cbc_work_out;
     }
 
-    aes = session->aes_ctx.aes_encrypt;
     data_len = crp->crp_payload_length;
+    if (CRYPTO_OP_IS_ENCRYPT(crp->crp_op)) {
+        is_encrypt = 1;
+        type = AES_ENCRYPTION;
+        aes = session->aes_ctx.aes_encrypt;
+    }
+    else {
+        is_encrypt = 0;
+        type = AES_DECRYPTION;
+        aes = session->aes_ctx.aes_decrypt;
+    }
 
     /* must be multiple of block size */
     if (data_len % WC_AES_BLOCK_SIZE) {
@@ -550,9 +597,10 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
     }
 
     crypto_read_iv(crp, iv);
-    error = wc_AesSetIV(aes, iv);
+    error = wc_AesSetKey(aes, csp->csp_cipher_key,
+                         csp->csp_cipher_klen, iv, type);
     if (error) {
-        device_printf(dev, "error: wc_AesSetIV: %d\n", error);
+        device_printf(dev, "error: wc_AesSetKey: %d\n", error);
         goto cbc_work_out;
     }
 
@@ -598,10 +646,19 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
         seg_len = rounddown(MIN(data_len, MIN(in_len, out_len)),
                            WC_AES_BLOCK_SIZE);
 
-        error = wc_AesCbcEncrypt(aes, out_block, in_block, seg_len);
-        if (error) {
-            device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
-            goto cbc_work_out;
+        if (is_encrypt) {
+            error = wc_AesCbcEncrypt(aes, out_block, in_block, seg_len);
+            if (error) {
+                device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
+                goto cbc_work_out;
+            }
+        }
+        else {
+            error = wc_AesCbcDecrypt(aes, out_block, in_block, seg_len);
+            if (error) {
+                device_printf(dev, "error: wc_AesCbcEncrypt: %d\n", error);
+                goto cbc_work_out;
+            }
         }
 
         if (out_block == block) {
