@@ -20,7 +20,7 @@ wolfkmod_print_data(const char * what, const uint8_t * data, size_t data_len)
 #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
 /*
- * cryptodev framework always uses a callback, even when sync.
+ * cryptodev framework always calls a callback, even when CRYPTOCAP_F_SYNC.
  */
 static int
 wolfkdriv_test_crp_callback(struct cryptop * crp)
@@ -29,6 +29,9 @@ wolfkdriv_test_crp_callback(struct cryptop * crp)
     return (0);
 }
 
+/* Test aes-cbc encrypt and decrypt a small buffer with opencrypto
+ * framework.
+ */
 static int wolfkdriv_test_aes_cbc(device_t dev, int crid)
 {
     crypto_session_t session = NULL;
@@ -153,8 +156,8 @@ static int wolfkdriv_test_aes_cbc_big(device_t dev, int crid)
     const byte iv[]  = "1234567890abcdef   ";
 
     memset(&csp, 0, sizeof(csp));
-    memcpy(work1, msg, sizeof(msg));
-    memcpy(work2, msg, sizeof(msg));
+    memcpy(work1, msg, sizeof(msg)); /* wolfcrypt work buffer */
+    memcpy(work2, msg, sizeof(msg)); /* opencrypto work buffer */
 
     /* wolfcrypt encrypt */
     aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
