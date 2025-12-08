@@ -225,46 +225,7 @@ static void km_AesFree(Aes * * aes) {
     *aes = NULL;
 }
 
-static int wolfkdriv_aes_ctx_new(device_t dev, wolfkdriv_session_t * session,
-                                 int type)
-{
-    int error = 0;
-
-    /* allocate Aes struct if we haven't yet. */
-    if (type == AES_ENCRYPTION) {
-        if (session->aes_ctx.aes_encrypt == NULL) {
-            session->aes_ctx.aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
-                                                  DYNAMIC_TYPE_AES);
-        }
-    }
-    else {
-        if (session->aes_ctx.aes_decrypt == NULL) {
-            session->aes_ctx.aes_decrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
-                                                  DYNAMIC_TYPE_AES);
-        }
-    }
-
-    if (type == AES_ENCRYPTION) {
-        if (session->aes_ctx.aes_encrypt == NULL) {
-            error = ENOMEM;
-        }
-    }
-    else {
-        if (session->aes_ctx.aes_decrypt == NULL) {
-            error = ENOMEM;
-        }
-    }
-
-    if (error) {
-        device_printf(dev, "error: newsession_cipher: alloc failed\n");
-    }
-    #ifdef WOLFKM_DEBUG_AES
-    printf("info: exiting km_AesExitCommon\n");
-    #endif /* WOLFKM_DEBUG_AES */
-    return (error);
-}
-
-static void wolfkdriv_aes_ctx_reset(km_aes_ctx * ctx)
+static void wolfkdriv_aes_ctx_clear(km_aes_ctx * ctx)
 {
     if (ctx != NULL) {
         if (ctx->aes_encrypt) {
@@ -471,6 +432,8 @@ static int wolfkdriv_newsession_cipher(device_t dev,
 
     session->klen = klen;
     session->ivlen = csp->csp_ivlen;
+
+    /* encrypt */
     session->aes_ctx.aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
                                           DYNAMIC_TYPE_AES);
 
@@ -486,10 +449,26 @@ static int wolfkdriv_newsession_cipher(device_t dev,
         goto newsession_cipher_out;
     }
 
+    /* decrypt */
+    session->aes_ctx.aes_decrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
+                                          DYNAMIC_TYPE_AES);
+
+    if (session->aes_ctx.aes_decrypt == NULL) {
+        error = ENOMEM;
+        device_printf(dev, "error: newsession_cipher: alloc failed\n");
+        goto newsession_cipher_out;
+    }
+
+    error = wc_AesInit(session->aes_ctx.aes_decrypt, NULL, INVALID_DEVID);
+    if (error) {
+        device_printf(dev, "error: newsession_cipher: aes init: %d\n", error);
+        goto newsession_cipher_out;
+    }
+
 newsession_cipher_out:
 
     if (error != 0) {
-        wolfkdriv_aes_ctx_reset(&session->aes_ctx);
+        wolfkdriv_aes_ctx_clear(&session->aes_ctx);
         return (EINVAL);
     }
 
@@ -540,7 +519,7 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
     session = crypto_get_driver_session(cses);
 
     /* clean it up */
-    wolfkdriv_aes_ctx_reset(&session->aes_ctx);
+    wolfkdriv_aes_ctx_clear(&session->aes_ctx);
 
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     device_printf(dev, "info: exiting freesession\n");
@@ -551,7 +530,6 @@ wolfkdriv_freesession(device_t dev, crypto_session_t cses)
 /*
  *
  */
-
 static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
                               struct cryptop * crp,
                               const struct crypto_session_params * csp)

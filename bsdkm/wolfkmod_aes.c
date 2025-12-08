@@ -44,12 +44,15 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
         0x95,0x94,0x92,0x57,0x5f,0x42,0x81,0x53,
         0x2c,0xcc,0x9d,0x46,0x77,0xa2,0x33,0xcb
     };
+    byte work[WC_AES_BLOCK_SIZE];
     /* padded to 16-bytes */
     const byte key[] = "0123456789abcdef   ";
     /* padded to 16-bytes */
     const byte iv[]  = "1234567890abcdef   ";
 
     memset(&csp, 0, sizeof(csp));
+    memset(work, 0, sizeof(work));
+    memcpy(work, msg, sizeof(msg));
 
     /* cbc */
     csp.csp_mode = CSP_MODE_CIPHER;
@@ -74,18 +77,35 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
 
     memcpy(crp->crp_iv, iv, WC_AES_BLOCK_SIZE);
 
-    crypto_use_buf(crp, msg, sizeof(msg));
+    crypto_use_buf(crp, work, sizeof(work));
     crp->crp_payload_start = 0;
-    crp->crp_payload_length = sizeof(msg);
+    crp->crp_payload_length = sizeof(work);
 
     error = crypto_dispatch(crp);
-
     if (error) {
         goto test_aes_out;
     }
 
-    error = XMEMCMP(msg, verify, sizeof(verify));
-    wolfkmod_print_data("msg_enc", msg, sizeof(msg));
+    error = XMEMCMP(work, verify, sizeof(verify));
+    if (error) {
+        goto test_aes_out;
+    }
+
+    wolfkmod_print_data("msg_enc", work, sizeof(work));
+
+    crp->crp_op = CRYPTO_OP_DECRYPT;
+
+    error = crypto_dispatch(crp);
+    if (error) {
+        goto test_aes_out;
+    }
+
+    error = XMEMCMP(work, msg, sizeof(msg));
+    if (error) {
+        goto test_aes_out;
+    }
+
+    wolfkmod_print_data("msg_dec", work, sizeof(work));
 
 test_aes_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
