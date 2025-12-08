@@ -156,9 +156,9 @@ static int wolfkdriv_test_aes_cbc_big(device_t dev, int crid)
     memcpy(work1, msg, sizeof(msg));
     memcpy(work2, msg, sizeof(msg));
 
+    /* wolfcrypt encrypt */
     aes_encrypt = (Aes *)XMALLOC(sizeof(Aes), NULL,
                                           DYNAMIC_TYPE_AES);
-
     if (aes_encrypt == NULL) {
         error = ENOMEM;
         device_printf(dev, "error: malloc failed\n");
@@ -183,7 +183,7 @@ static int wolfkdriv_test_aes_cbc_big(device_t dev, int crid)
         goto test_aes_cbc_big_out;
     }
 
-    /* cbc */
+    /* opencrypto encrypt */
     csp.csp_mode = CSP_MODE_CIPHER;
     csp.csp_cipher_alg = CRYPTO_AES_CBC;
     csp.csp_ivlen = WC_AES_BLOCK_SIZE;
@@ -222,6 +222,7 @@ static int wolfkdriv_test_aes_cbc_big(device_t dev, int crid)
 
     wolfkmod_print_data("msg_enc", work2, sizeof(work2));
 
+    /* opencrypto decrypt */
     crp->crp_op = CRYPTO_OP_DECRYPT;
 
     error = crypto_dispatch(crp);

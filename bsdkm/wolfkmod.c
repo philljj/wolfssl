@@ -622,7 +622,7 @@ static int wolfkdriv_cbc_work(device_t dev, wolfkdriv_session_t * session,
 
         /* choose which of data_len, in_len, out_len, is shorter. */
         seg_len = rounddown(MIN(data_len, MIN(in_len, out_len)),
-                           WC_AES_BLOCK_SIZE);
+                            WC_AES_BLOCK_SIZE);
 
         if (is_encrypt) {
             error = wc_AesCbcEncrypt(aes, out_block, in_block, seg_len);
