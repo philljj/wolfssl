@@ -10,14 +10,14 @@ wolfkmod_print_data(const char * what, const uint8_t * data, size_t data_len)
     printf("%s:\n", what);
     for (i = 0; i < data_len; ++i) {
         printf("0x%02x, ", data[i]);
-        if ((i + 1) % 8) {
+        if ((i + 1) % 8 == 0) {
             printf("\n");
         }
     }
+
     printf("\n");
 }
 #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
-
 
 /*
  * cryptodev framework always uses a callback, even when sync.
@@ -29,7 +29,7 @@ wolfkdriv_test_crp_callback(struct cryptop * crp)
     return (0);
 }
 
-static int wolfkdriv_test_aes(device_t dev, int crid)
+static int wolfkdriv_test_aes_cbc(device_t dev, int crid)
 {
     crypto_session_t session = NULL;
     struct crypto_session_params csp;
@@ -62,13 +62,13 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
     csp.csp_cipher_klen = WC_AES_BLOCK_SIZE;
     error = crypto_newsession(&session, &csp, crid);
     if (error || session == NULL) {
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     crp = crypto_getreq(session, M_WAITOK);
     if (crp == NULL) {
         device_printf(dev, "error: test_aes: crypto_getreq failed\n");
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     crp->crp_callback = wolfkdriv_test_crp_callback;
@@ -83,12 +83,12 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
 
     error = crypto_dispatch(crp);
     if (error) {
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     error = XMEMCMP(work, verify, sizeof(verify));
     if (error) {
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     wolfkmod_print_data("msg_enc", work, sizeof(work));
@@ -97,19 +97,19 @@ static int wolfkdriv_test_aes(device_t dev, int crid)
 
     error = crypto_dispatch(crp);
     if (error) {
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     error = XMEMCMP(work, msg, sizeof(msg));
     if (error) {
-        goto test_aes_out;
+        goto test_aes_cbc_out;
     }
 
     wolfkmod_print_data("msg_dec", work, sizeof(work));
 
-test_aes_out:
+test_aes_cbc_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
-    device_printf(dev, "info: test_aes: error=%d, session=%p, crp=%p\n",
+    device_printf(dev, "info: test_aes_cbc: error=%d, session=%p, crp=%p\n",
                   error, (void *)session, (void*)crp);
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
@@ -122,6 +122,24 @@ test_aes_out:
         crypto_freesession(session);
         session = NULL;
     }
+
+    return (error);
+}
+
+
+static int wolfkdriv_test_aes(device_t dev, int crid)
+{
+    int error = 0;
+
+    if (error == 0) {
+        error = wolfkdriv_test_aes_cbc(dev, crid);
+    }
+
+    /*
+    if (error == 0) {
+        error = wolfkdriv_test_aes_gcm(dev, crid);
+    }
+    */
 
     return (error);
 }
