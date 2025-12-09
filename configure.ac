@@ -847,6 +847,10 @@ fi
 
 if test "x$ENABLED_BSDKM_REGISTER" = "xyes"
 then
+    if test "$ENABLED_AESGCM" != "no" && test "$ENABLED_AESGCM_STREAM" = "no" && test "$enable_aesgcm_stream" != "no" && (test "$ENABLED_FIPS" = "no" || test $HAVE_FIPS_VERSION -ge 6); then
+        ENABLED_AESGCM_STREAM=yes
+    fi
+
     AM_CFLAGS="$AM_CFLAGS -DBSDKM_CRYPTO_REGISTER"
     AC_SUBST([ENABLED_BSDKM_REGISTER])
 fi
