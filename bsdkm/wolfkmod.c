@@ -719,18 +719,18 @@ static int wolfkdriv_gcm_work(device_t dev, wolfkdriv_session_t * session,
         is_encrypt = 0;
     }
 
+    error = wc_AesGcmSetKey(aes, csp->csp_cipher_key,
+                            csp->csp_cipher_klen);
+    if (error) {
+        device_printf(dev, "error: wc_AesGcmSetKey: %d\n", error);
+        goto gcm_work_out;
+    }
+
     crypto_read_iv(crp, iv);
     error = wc_AesGcmInit(aes, NULL /* key */, 0 /* keylen */,
                           iv, csp->csp_ivlen);
     if (error) {
-        device_printf(dev, "error: wc_AesSetKey: %d\n", error);
-        goto gcm_work_out;
-    }
-
-    error = wc_AesGcmSetKey(aes, csp->csp_cipher_key,
-                            csp->csp_cipher_klen);
-    if (error) {
-        device_printf(dev, "error: wc_AesSetKey: %d\n", error);
+        device_printf(dev, "error: wc_AesGcmInit: %d\n", error);
         goto gcm_work_out;
     }
 

@@ -366,6 +366,8 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
      * */
 
     /* set crypto session params */
+    memset(&csp, 0, sizeof(csp));
+    csp.csp_flags |= CSP_F_SEPARATE_AAD;
     csp.csp_mode = CSP_MODE_AEAD;
     csp.csp_cipher_alg = CRYPTO_AES_NIST_GCM_16;
     csp.csp_ivlen = sizeof(iv1);
@@ -375,6 +377,8 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
     /* get crypto session handle */
     error = crypto_newsession(&session, &csp, crid);
     if (error || session == NULL) {
+        device_printf(dev, "error: test_aes: crypto_newsession: %d, %p\n",
+                      error, (void *)session);
         goto test_aes_gcm_out;
     }
 
@@ -402,7 +406,7 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
 
     error = crypto_dispatch(crp);
     if (error) {
-        goto test_aes_cbc_out;
+        goto test_aes_gcm_out;
     }
 
 test_aes_gcm_out:
