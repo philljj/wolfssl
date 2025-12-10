@@ -328,14 +328,13 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
 
     byte resultT[sizeof(t1) + WC_AES_BLOCK_SIZE];
     byte resultC[sizeof(p) + WC_AES_BLOCK_SIZE];
-    byte resultT2[sizeof(t1) + WC_AES_BLOCK_SIZE];
     byte resultC2[sizeof(p) + WC_AES_BLOCK_SIZE];
 
     XMEMSET(resultT, 0, sizeof(resultT));
     XMEMSET(resultC, 0, sizeof(resultC));
 
-    XMEMSET(resultT2, 0, sizeof(resultT));
     XMEMSET(resultC2, 0, sizeof(resultC));
+    XMEMCPY(resultC2, p, sizeof(p));
 
     /* wolfcrypt encrypt */
     enc = (Aes *)XMALLOC(sizeof(Aes), NULL, DYNAMIC_TYPE_AES);
@@ -354,12 +353,14 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
     error = wc_AesGcmEncryptFinal(enc, resultT, sizeof(t1));
     if (error) { goto test_aes_gcm_out; }
 
+    wolfkmod_print_data("resultC", resultC, sizeof(p));
+    wolfkmod_print_data("resultT", resultT, sizeof(t1));
+
     error = XMEMCMP(resultC, c1, sizeof(c1));
     if (error) { goto test_aes_gcm_out; }
 
     error = XMEMCMP(resultT, t1, sizeof(t1));
     if (error) { goto test_aes_gcm_out; }
-
 
     /*
      * opencrypto encrypt
@@ -398,16 +399,26 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
 
     crypto_use_buf(crp, resultC2, sizeof(resultC2));
     crp->crp_payload_start = 0;
-    crp->crp_payload_length = sizeof(resultC2);
+    crp->crp_payload_length = sizeof(p);
 
     crp->crp_aad = a;
     crp->crp_aad_start = 0;
     crp->crp_aad_length = sizeof(a);
+    crp->crp_digest_start = crp->crp_payload_start + sizeof(p);
 
     error = crypto_dispatch(crp);
     if (error) {
         goto test_aes_gcm_out;
     }
+
+    wolfkmod_print_data("resultC2", resultC2, sizeof(p));
+    wolfkmod_print_data("resultT2", resultC2 + sizeof(p), sizeof(t1));
+
+    error = XMEMCMP(resultC2, c1, sizeof(c1));
+    if (error) { goto test_aes_gcm_out; }
+
+    error = XMEMCMP(resultC2 + sizeof(p), t1, sizeof(t1));
+    if (error) { goto test_aes_gcm_out; }
 
 test_aes_gcm_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
