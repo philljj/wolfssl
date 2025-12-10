@@ -420,6 +420,19 @@ static int wolfkdriv_test_aes_gcm(device_t dev, int crid)
     error = XMEMCMP(resultC2 + sizeof(p), t1, sizeof(t1));
     if (error) { goto test_aes_gcm_out; }
 
+    /* opencrypto decrypt */
+    crp->crp_op = (CRYPTO_OP_DECRYPT | CRYPTO_OP_VERIFY_DIGEST);
+
+    error = crypto_dispatch(crp);
+    if (error) {
+        goto test_aes_gcm_out;
+    }
+
+    wolfkmod_print_data("resultC2_dec", resultC2, sizeof(p));
+
+    error = XMEMCMP(resultC2, p, sizeof(p));
+    if (error) { goto test_aes_gcm_out; }
+
 test_aes_gcm_out:
     #if defined(WOLFSSL_BSDKM_VERBOSE_DEBUG)
     device_printf(dev, "info: test_aes_gcm: error=%d, session=%p, crp=%p\n",
