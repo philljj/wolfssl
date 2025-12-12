@@ -41,7 +41,8 @@
  * extern global version from /usr/src/sys/sys/systm.h */
 #define version wc_version
 
-#define wc_km_printf printf
+#define wc_km_printf    printf
+#define wc_km_print_err printf
 
 /* str and char utility functions */
 #define XATOI(s) ({                                         \
@@ -74,6 +75,16 @@ extern struct malloc_type M_WOLFSSL[1];
 
 #if !defined(SINGLE_THREADED)
     #define WC_MUTEX_OPS_INLINE
+
+    /* Copied from wc_port.h */
+    #if defined(HAVE_FIPS) && !defined(WOLFSSL_API_PREFIX_MAP)
+        /* For FIPS keep the function names the same */
+        #define wc_InitMutex   InitMutex
+        #define wc_FreeMutex   FreeMutex
+        #define wc_LockMutex   LockMutex
+        #define wc_UnLockMutex UnLockMutex
+        #define NO_THREAD_LS
+    #endif /* HAVE_FIPS */
 
     typedef struct wolfSSL_Mutex {
         struct mtx lock;
@@ -112,6 +123,12 @@ extern struct malloc_type M_WOLFSSL[1];
     #define WOLFSSL_ATOMIC_LOAD(x)  (int)atomic_load_acq_int(&(x))
     #define WOLFSSL_ATOMIC_STORE(x, v)  atomic_store_rel_int(&(x), (v))
     #define WOLFSSL_ATOMIC_OPS
+
+    #if defined(HAVE_FIPS)
+        /* There is no corresponding ATOMIC_INIT macro in FreeBSD.
+         * The FreeBSD equivalent is just an integer initialization. */
+        #define ATOMIC_INIT(x) (x)
+    #endif
 #endif /* WOLFSSL_HAVE_ATOMIC_H && !WOLFSSL_NO_ATOMICS */
 
 #endif /* WOLFSSL_BSDKM */
