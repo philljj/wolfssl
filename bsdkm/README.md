@@ -54,15 +54,13 @@ sudo kldunload libwolfssl
 Building with FIPS is largely the same, with the additional step of
 configuring a fips hash.
 
-1. Build bsdkm with:
+1. Build bsdkm with (The `fips_hash` here is a placeholder):
 
 ```sh
 fips_hash=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ./configure --enable-freebsdkm --enable-cryptonly --enable-fips=v6 \
   CFLAGS="-DWOLFCRYPT_FIPS_CORE_HASH_VALUE=$fips_hash" && make
 ```
-
-The `fips_hash` here is a placeholder.
 
 2. Attempt first install. This is expected to fail, because the hash was a
 placeholder.
@@ -90,8 +88,8 @@ Id  Refs Name
 523    1 libwolfssl_fips
 ```
 
-On unload, the FIPS self-test will run a final time and print to system
-message buffer:
+On unload, the FIPS self-test will run a final time and print its status
+to system message buffer:
 
 ```
 info: wolfCrypt FIPS re-self-test succeeded at unload: all algorithms re-verified.
