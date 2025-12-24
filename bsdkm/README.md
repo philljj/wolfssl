@@ -78,3 +78,11 @@ Id  Refs Name
 523    1 libwolfssl_fips
 ```
 
+On unload, the FIPS self-test will run a final time and print to system
+message buffer:
+
+```
+info: wolfCrypt FIPS re-self-test succeeded at unload: all algorithms re-verified.
+info: libwolfssl unloaded
+```
+
