@@ -1,8 +1,17 @@
 # wolfSSL bsdkm (bsd kernel module)
 
 libwolfssl supports building as a FreeBSD kernel module (`libwolfssl.ko`).
-When loaded, wolfCrypt and API are made available to the rest of
-the kernel, supporting cryptography in kernel space.
+When loaded, wolfCrypt is made available to the rest of the kernel, allowing
+other loadable modules to link to wolfCrypt.
+
+Supported features:
+- wolfCrypt in kernel.
+- FIPS-wolfcrypt.
+
+Planned features:
+- crypto acceleration: AES-NI, AVX, etc.
+- kernel opencrypto driver registration.
+- full wolfSSL in kernel (kernel TLS).
 
 ## Building and Installing
 
@@ -12,8 +21,8 @@ Build bsdkm with:
 ./configure --enable-freebsdkm --enable-cryptonly && make
 ```
 
-note: replace `/usr/src/linux` with a path to your fully configured and built
-target kernel source tree.
+The default freebsdkm build assumes kernel source tree root at `/usr/src/sys/`.
+Use `--with-kernel-source=PATH` to configure a different path.
 
 Assuming you are targeting your native system, install with:
 
@@ -41,6 +50,9 @@ sudo kldunload libwolfssl
 | --with-kernel-source=PATH        | Path to kernel tree root (default `/usr/src/sys`) |
 
 ### FIPS
+
+Building with FIPS is largely the same, with the additional step of
+configuring a fips hash.
 
 1. Build bsdkm with:
 
