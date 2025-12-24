@@ -54,7 +54,7 @@ sudo kldunload libwolfssl
 Building with FIPS is largely the same, with the additional step of
 configuring a fips hash.
 
-1. Build bsdkm with (The `fips_hash` here is a placeholder):
+1. Build bsdkm (the `fips_hash` here is a placeholder):
 
 ```sh
 fips_hash=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
