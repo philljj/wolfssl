@@ -45,6 +45,8 @@
     #include <wolfcrypt/test/test.h>
 #endif
 
+#include <wolfssl/wolfcrypt/random.h>
+
 MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 
 static int wolfkmod_init(void);
@@ -102,6 +104,14 @@ static int wolfkmod_init(void)
     }
     #endif /* HAVE_FIPS */
 
+    #ifdef WC_RNG_SEED_CB
+    error = wc_SetSeed_Cb(WC_GENERATE_SEED_DEFAULT);
+    if (error < 0) {
+        printf("error: wc_SetSeed_Cb failed: %d\n", error);
+        return (ECANCELED);
+    }
+    #endif /* WC_RNG_SEED_CB */
+
     #ifdef WOLFCRYPT_ONLY
     error = wolfCrypt_Init();
     if (error != 0) {
@@ -113,6 +123,42 @@ static int wolfkmod_init(void)
     if (error != WOLFSSL_SUCCESS) {
         printf("error: wolfSSL_Init failed: %s\n", wc_GetErrorString(error));
         return (ECANCELED);
+    }
+    #endif
+
+    #ifdef HAVE_FIPS
+    error = wc_RunAllCast_fips();
+    if (error != 0) {
+        printf("error: wc_RunAllCast_fips failed with "
+               "return value %d\n", error);
+        return (ECANCELED);
+    }
+    else {
+        printf("FIPS 140-3 wolfCrypt-fips v%d.%d.%d%s%s startup "
+               "self-test succeeded.\n",
+#ifdef HAVE_FIPS_VERSION_MAJOR
+            HAVE_FIPS_VERSION_MAJOR,
+#else
+            HAVE_FIPS_VERSION,
+#endif
+#ifdef HAVE_FIPS_VERSION_MINOR
+            HAVE_FIPS_VERSION_MINOR,
+#else
+            0,
+#endif
+#ifdef HAVE_FIPS_VERSION_PATCH
+            HAVE_FIPS_VERSION_PATCH,
+#else
+            0,
+#endif
+#ifdef HAVE_FIPS_VERSION_PORT
+            "-",
+            HAVE_FIPS_VERSION_PORT
+#else
+            "",
+            ""
+#endif
+        );
     }
     #endif
 
