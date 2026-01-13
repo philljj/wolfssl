@@ -105,8 +105,9 @@ extern struct malloc_type M_WOLFSSL[1];
 
 
 #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
-    /*
+    /* wrapper defines for FPU_KERN(9).
      * /usr/src/sys/amd64/amd64/fpu.c
+     * /usr/src/sys/amd64/include/pcb.h
      * */
     #include <sys/proc.h>
     #include <machine/fpu.h>
@@ -115,28 +116,32 @@ extern struct malloc_type M_WOLFSSL[1];
         #define WOLFSSL_USE_SAVE_VECTOR_REGISTERS
     #endif
 
+    #define wolfkmod_print_curthread() \
+        printf("cpuid = %d, curthread: td_critnest = %d, "                   \
+               "td_pcb->flags & PCB_KERNFPU = %02x\n",                       \
+               PCPU_GET(cpuid), curthread->td_critnest,                      \
+               curthread->td_pcb->pcb_flags & PCB_KERNFPU);
+
     /* fpu_kern_enter wrapper define */
     #if defined(WOLFSSL_BSDKM_FPU_DEBUG)
-        #define fpu_kern_enter_wrapper()                                     \
-        printf("fpu_kern_enter, %s, %d\n", __func__, __LINE__);              \
-        printf("curthread->td_pcb->flags & PCB_KERNFPU = %02x\n",            \
-               curthread->td_pcb->pcb_flags & PCB_KERNFPU);                  \
-        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
+        #define wolfkmod_fpu_kern_enter()                                    \
+            printf("fpu_kern_enter, %s, %d\n", __func__, __LINE__);          \
+            wolfkmod_print_curthread()                                       \
+            fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
     #else
-        #define fpu_kern_enter_wrapper()                                     \
-        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
+        #define wolfkmod_fpu_kern_enter()                                    \
+            fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
     #endif
 
     /* fpu_kern_leave wrapper define */
     #if defined(WOLFSSL_BSDKM_FPU_DEBUG)
-        #define fpu_kern_leave_wrapper()                                     \
-        printf("fpu_kern_leave, %s, %d\n", __func__, __LINE__);              \
-        printf("curthread->td_pcb->flags & PCB_KERNFPU = %02x\n",            \
-               curthread->td_pcb->pcb_flags & PCB_KERNFPU);                  \
-        fpu_kern_leave(curthread, NULL);
+        #define wolfkmod_fpu_kern_leave()                                    \
+            printf("fpu_kern_leave, %s, %d\n", __func__, __LINE__);          \
+            wolfkmod_print_curthread()                                       \
+            fpu_kern_leave(curthread, NULL);
     #else
-        #define fpu_kern_leave_wrapper()                                     \
-        fpu_kern_leave(curthread, NULL);
+        #define wolfkmod_fpu_kern_leave()                                    \
+            fpu_kern_leave(curthread, NULL);
     #endif
 
     #define SAVE_VECTOR_REGISTERS(fail_clause)                               \
@@ -145,7 +150,7 @@ extern struct malloc_type M_WOLFSSL[1];
             curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
         }                                                                    \
         else {                                                               \
-            fpu_kern_enter_wrapper();                                        \
+            wolfkmod_fpu_kern_enter();                                       \
             fpu_kern_entered = 1;                                            \
         }                                                                    \
         (int) 0;                                                             \
@@ -156,7 +161,7 @@ extern struct malloc_type M_WOLFSSL[1];
             curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
         }                                                                    \
         else {                                                               \
-            fpu_kern_enter_wrapper();                                        \
+            wolfkmod_fpu_kern_enter();                                       \
             fpu_kern_entered = 1;                                            \
         }                                                                    \
         (int) 0;                                                             \
@@ -164,7 +169,7 @@ extern struct malloc_type M_WOLFSSL[1];
 
     #define RESTORE_VECTOR_REGISTERS()                                       \
         if (fpu_kern_entered) {                                              \
-            fpu_kern_leave_wrapper();                                        \
+            wolfkmod_fpu_kern_leave();                                       \
             fpu_kern_entered = 0;                                            \
         }                                                                    \
 
