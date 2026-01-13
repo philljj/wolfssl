@@ -4758,6 +4758,9 @@ static void AesSetKey_C(Aes* aes, const byte* key, word32 keySz, int dir)
         byte   local[32];
         word32 localSz = 32;
     #endif
+    #if defined(WOLFSSL_BSDKM) && defined(WOLFSSL_AESNI)
+        int fpu_kern_entered = 0;
+    #endif /* WOLFSSL_BSDKM && WOLFSSL_AESNI */
 
         if (aes == NULL)
             return BAD_FUNC_ARG;
@@ -5211,20 +5214,24 @@ int wc_AesSetIV(Aes* aes, const byte* iv)
 
 #ifdef WC_C_DYNAMIC_FALLBACK
 
-#define VECTOR_REGISTERS_PUSH {                                      \
-        int orig_use_aesni = aes->use_aesni;                         \
-        if (aes->use_aesni && (SAVE_VECTOR_REGISTERS2() != 0)) {     \
-            aes->use_aesni = 0;                                      \
-        }                                                            \
-        WC_DO_NOTHING
+#ifndef VECTOR_REGISTERS_PUSH
+    #define VECTOR_REGISTERS_PUSH {                                      \
+            int orig_use_aesni = aes->use_aesni;                         \
+            if (aes->use_aesni && (SAVE_VECTOR_REGISTERS2() != 0)) {     \
+                aes->use_aesni = 0;                                      \
+            }                                                            \
+            WC_DO_NOTHING
+#endif /* !VECTOR_REGISTERS_PUSH */
 
-#define VECTOR_REGISTERS_POP                                         \
-        if (aes->use_aesni)                                          \
-            RESTORE_VECTOR_REGISTERS();                              \
-        else                                                         \
-            aes->use_aesni = orig_use_aesni;                         \
-    }                                                                \
-    WC_DO_NOTHING
+#ifndef VECTOR_REGISTERS_POP
+    #define VECTOR_REGISTERS_POP                                         \
+            if (aes->use_aesni)                                          \
+                RESTORE_VECTOR_REGISTERS();                              \
+            else                                                         \
+                aes->use_aesni = orig_use_aesni;                         \
+        }                                                                \
+        WC_DO_NOTHING
+#endif /* !VECTOR_REGISTERS_POP */
 
 #elif defined(SAVE_VECTOR_REGISTERS2_DOES_NOTHING)
 
@@ -7027,7 +7034,6 @@ int wc_AesCbcEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
         #endif /* __aarch64__ || WOLFSSL_ARMASM_NO_HW_CRYPTO */
             return 0;
     #else
-            VECTOR_REGISTERS_PUSH;
 
         #if defined(HAVE_AES_ECB) && !defined(WOLFSSL_PIC32MZ_CRYPT) && \
             !defined(XTRANSFORM_AESCTRBLOCK)
@@ -7058,6 +7064,7 @@ int wc_AesCbcEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
             #endif
                 /* do as many block size ops as possible */
                 while (sz >= WC_AES_BLOCK_SIZE) {
+                    VECTOR_REGISTERS_PUSH;
                 #ifdef XTRANSFORM_AESCTRBLOCK
                     XTRANSFORM_AESCTRBLOCK(aes, out, in);
                 #else
@@ -7068,6 +7075,7 @@ int wc_AesCbcEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
                     XMEMCPY(out, scratch, WC_AES_BLOCK_SIZE);
                 #endif
                     IncrementAesCounter((byte*)aes->reg);
+                    VECTOR_REGISTERS_POP;
 
                     out += WC_AES_BLOCK_SIZE;
                     in  += WC_AES_BLOCK_SIZE;
@@ -7079,12 +7087,14 @@ int wc_AesCbcEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
 
             /* handle non block size remaining and store unused byte count in left */
             if ((ret == 0) && sz) {
+                VECTOR_REGISTERS_PUSH;
                 ret = wc_AesEncrypt(aes, (byte*)aes->reg, (byte*)aes->tmp);
                 if (ret == 0) {
                     IncrementAesCounter((byte*)aes->reg);
                     aes->left = WC_AES_BLOCK_SIZE - sz;
                     xorbufout(out, in, aes->tmp, sz);
                 }
+                VECTOR_REGISTERS_POP;
             }
 
             if (ret < 0)
@@ -7093,8 +7103,6 @@ int wc_AesCbcEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
         #ifdef WOLFSSL_CHECK_MEM_ZERO
             wc_MemZero_Check(scratch, WC_AES_BLOCK_SIZE);
         #endif
-
-            VECTOR_REGISTERS_POP;
 
             return ret;
     #endif
@@ -7460,6 +7468,7 @@ int wc_AesGcmSetKey(Aes* aes, const byte* key, word32 len)
 #if defined(GCM_TABLE) || defined(GCM_TABLE_4BIT)
 #if defined(WOLFSSL_AESNI) && defined(GCM_TABLE_4BIT)
         if (aes->use_aesni) {
+            VECTOR_REGISTERS_PUSH;
     #if defined(WC_C_DYNAMIC_FALLBACK)
         #ifdef HAVE_INTEL_AVX2
             if (IS_INTEL_AVX2(intel_flags)) {
@@ -7477,6 +7486,7 @@ int wc_AesGcmSetKey(Aes* aes, const byte* key, word32 len)
                 GCM_generate_m0_aesni(aes->gcm.H, (byte*)aes->gcm.M0);
             }
     #endif
+            VECTOR_REGISTERS_POP;
         }
         else
 #endif

@@ -1995,11 +1995,15 @@ static const char* bench_result_words3[][5] = {
     #pragma warning(disable: 4996)
 #endif
 
-#ifdef WOLFSSL_CURRTIME_REMAP
-    #define current_time WOLFSSL_CURRTIME_REMAP
+#if defined(WOLFSSL_BSDKM)
+        int64_t current_time(int reset);
 #else
-    double current_time(int reset);
-#endif
+    #ifdef WOLFSSL_CURRTIME_REMAP
+        #define current_time WOLFSSL_CURRTIME_REMAP
+    #else
+        double current_time(int reset);
+    #endif
+#endif /* WOLFSSL_BSDKM */
 
 #ifdef LINUX_RUSAGE_UTIME
     static void check_for_excessive_stime(const char *algo,
@@ -2683,7 +2687,13 @@ static WC_INLINE void bench_stats_start(int* count, double* start)
 #endif
 }
 
-#ifdef WOLFSSL_USE_SAVE_VECTOR_REGISTERS
+#if defined(WOLFSSL_BSDKM)
+    #define bench_stats_start(count, start) do {                               \
+        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);                       \
+        bench_stats_start(count, start);                                       \
+    } while (0)
+
+#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     #define bench_stats_start(count, start) do {                               \
         SAVE_VECTOR_REGISTERS(pr_err(                                          \
             "ERROR: SAVE_VECTOR_REGISTERS failed for benchmark run.");         \
@@ -3161,7 +3171,9 @@ static void bench_stats_sym_finish(const char* desc, int useDeviceID,
     (void)useDeviceID;
     (void)ret;
 
-#ifdef WOLFSSL_USE_SAVE_VECTOR_REGISTERS
+#if defined(WOLFSSL_BSDKM)
+    fpu_kern_leave(curthread, NULL);
+#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
     kernel_fpu_end();
@@ -3559,7 +3571,9 @@ static void bench_stats_asym_finish_ex(const char* algo, int strength,
     (void)useDeviceID;
     (void)ret;
 
-#ifdef WOLFSSL_USE_SAVE_VECTOR_REGISTERS
+#if defined(WOLFSSL_BSDKM)
+    fpu_kern_leave(curthread, NULL);
+#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
     kernel_fpu_end();
@@ -16022,6 +16036,20 @@ void bench_sphincsKeySign(byte level, byte optim)
         (void)reset;
         u64 ns = ktime_get_ns();
         return (double)ns / 1000000000.0;
+    }
+
+#elif defined(WOLFSSL_BSDKM)
+
+    #include <sys/timex.h>
+    int64_t current_time(int reset)
+    {
+        (void)reset;
+        struct timespec ts;
+        int64_t result = 0;
+
+        getnanouptime(&ts);
+        result = (int64_t) ts.tv_sec + (int64_t) ts.tv_nsec / NANOSECOND;
+        return result;
     }
 
 #elif defined(WOLFSSL_GAISLER_BCC)

@@ -5,6 +5,7 @@ WOLFSSL_DIR=../
 
 CFLAGS+=-I${WOLFSSL_DIR}
 CFLAGS+=-DWOLFSSL_IGNORE_FILE_WARN -DHAVE_CONFIG_H -DNO_MAIN_DRIVER
+
 #
 # debug options
 #   verbose printing:
@@ -21,10 +22,17 @@ WOLFSSL_OBJS != echo ${src_libwolfssl_la_OBJECTS} | \
   sed 's|src_libwolfssl_la-||g' | sed 's|\.lo|.o|g' | \
   sed 's|wolfcrypt/src/|${WOLFSSL_DIR}/wolfcrypt/src/|g'
 
+# wolfcrypt test
 .if ${ENABLED_CRYPT_TESTS} == "yes"
     WOLFSSL_OBJS += ${WOLFSSL_DIR}/wolfcrypt/test/test.o
 .else
     CFLAGS+=-DNO_CRYPT_TEST
+.endif
+
+# wolfcrypt benchmark
+.if ${ENABLED_KERNEL_BENCHMARKS} == "yes"
+    WOLFSSL_OBJS += ${WOLFSSL_DIR}/wolfcrypt/benchmark/benchmark.o
+    CFLAGS+=-DWOLFSSL_NO_FLOAT_FMT
 .endif
 
 OBJS += ${WOLFSSL_OBJS}
@@ -44,6 +52,20 @@ OBJS += ${WOLFSSL_OBJS}
     SYSDIR?= ${KERNEL_ROOT}
 .endif
 .include "${SYSDIR}/conf/kmod.mk"
+
+# To use aesni in FreeBSD kernel we need to adjust build flags.
+# See these for reference:
+#   - /usr/src/sys/modules/aesni/Makefile
+#   - /usr/src/sys/conf/kern.mk
+.if ${ENABLED_ASM} == "yes"
+  CFLAGS.aes.c += -msse -msse2 -msse4.1 -maes -mpclmul
+  CFLAGS.aes.c := ${CFLAGS.aes.c:N-nostdinc}
+  CFLAGS.aes.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
+  CFLAGS.benchmark.c += -msse -msse2 -msse4.1 -maes -mpclmul
+  CFLAGS.benchmark.c := ${CFLAGS.aes.c:N-nostdinc}
+  CFLAGS.benchmark.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
+  .PATH: ${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
+.endif
 
 # Smooth out a few inconsistencies between FreeBSD default compiler flags
 # in /usr/src/sys/conf/kern.mk, vs wolfssl harden flags in

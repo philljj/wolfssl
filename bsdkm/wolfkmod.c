@@ -44,6 +44,9 @@
 #if !defined(NO_CRYPT_TEST)
     #include <wolfcrypt/test/test.h>
 #endif
+#if defined(WOLFSSL_KERNEL_BENCHMARKS)
+    #include <wolfcrypt/benchmark/benchmark.h>
+#endif
 
 #include <wolfssl/wolfcrypt/random.h>
 
@@ -211,6 +214,16 @@ static int wolfkmod_load(void)
     }
     printf("info: wolfCrypt self-test passed.\n");
     #endif /* NO_CRYPT_TEST */
+
+    #ifdef WOLFSSL_KERNEL_BENCHMARKS
+    error = benchmark_test(NULL);
+    if (error != 0) {
+        printf("error: wolfcrypt benchmark failed: %d\n", error);
+        (void)wolfkmod_cleanup();
+        return (ECANCELED);
+    }
+    printf("info: wolfCrypt benchmark passed.\n");
+    #endif /* WOLFSSL_KERNEL_BENCHMARKS */
 
     /**
      * todo: register wolfcrypt algs here with crypto_get_driverid

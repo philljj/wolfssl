@@ -61,13 +61,13 @@ static inline time_t wolfkmod_time(time_t * tloc) {
 #define WOLFSSL_DEBUG_PRINTF_FN printf
 
 /* str and char utility functions */
-#define XATOI(s) ({                                         \
-      char * endptr = NULL;                                 \
-      long   _xatoi_ret = strtol(s, &endptr, 10);           \
-      if ((s) == endptr || *endptr != '\0') {               \
-        _xatoi_ret = 0;                                     \
-      }                                                     \
-      (int)_xatoi_ret;                                      \
+#define XATOI(s) ({                                                          \
+      char * endptr = NULL;                                                  \
+      long   _xatoi_ret = strtol(s, &endptr, 10);                            \
+      if ((s) == endptr || *endptr != '\0') {                                \
+        _xatoi_ret = 0;                                                      \
+      }                                                                      \
+      (int)_xatoi_ret;                                                       \
 })
 
 #if !defined(XMALLOC_OVERRIDE)
@@ -102,6 +102,90 @@ extern struct malloc_type M_WOLFSSL[1];
         if(_xp) free(_xp, M_WOLFSSL);                                        \
     })
 #endif /* WOLFSSL_BSDKM_DEBUG_MEMORY */
+
+
+#if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
+    /*
+     * /usr/src/sys/amd64/amd64/fpu.c
+     * */
+    #include <sys/proc.h>
+    #include <machine/fpu.h>
+    #include <machine/pcb.h>
+    #ifndef WOLFSSL_USE_SAVE_VECTOR_REGISTERS
+        #define WOLFSSL_USE_SAVE_VECTOR_REGISTERS
+    #endif
+
+    /* fpu_kern_enter wrapper define */
+    #if defined(WOLFSSL_BSDKM_FPU_DEBUG)
+        #define fpu_kern_enter_wrapper()                                     \
+        printf("fpu_kern_enter, %s, %d\n", __func__, __LINE__);              \
+        printf("curthread->td_pcb->flags & PCB_KERNFPU = %02x\n",            \
+               curthread->td_pcb->pcb_flags & PCB_KERNFPU);                  \
+        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
+    #else
+        #define fpu_kern_enter_wrapper()                                     \
+        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);
+    #endif
+
+    /* fpu_kern_leave wrapper define */
+    #if defined(WOLFSSL_BSDKM_FPU_DEBUG)
+        #define fpu_kern_leave_wrapper()                                     \
+        printf("fpu_kern_leave, %s, %d\n", __func__, __LINE__);              \
+        printf("curthread->td_pcb->flags & PCB_KERNFPU = %02x\n",            \
+               curthread->td_pcb->pcb_flags & PCB_KERNFPU);                  \
+        fpu_kern_leave(curthread, NULL);
+    #else
+        #define fpu_kern_leave_wrapper()                                     \
+        fpu_kern_leave(curthread, NULL);
+    #endif
+
+    #define SAVE_VECTOR_REGISTERS(fail_clause)                               \
+        int fpu_kern_entered = 0;                                            \
+        if (is_fpu_kern_thread(0) ||                                         \
+            curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
+        }                                                                    \
+        else {                                                               \
+            fpu_kern_enter_wrapper();                                        \
+            fpu_kern_entered = 1;                                            \
+        }                                                                    \
+        (int) 0;                                                             \
+
+
+    #define SAVE_VECTOR_REGISTERS2() ({                                      \
+        if (is_fpu_kern_thread(0) ||                                         \
+            curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
+        }                                                                    \
+        else {                                                               \
+            fpu_kern_enter_wrapper();                                        \
+            fpu_kern_entered = 1;                                            \
+        }                                                                    \
+        (int) 0;                                                             \
+    })
+
+    #define RESTORE_VECTOR_REGISTERS()                                       \
+        if (fpu_kern_entered) {                                              \
+            fpu_kern_leave_wrapper();                                        \
+            fpu_kern_entered = 0;                                            \
+        }                                                                    \
+
+    #define VECTOR_REGISTERS_PUSH                                            \
+            int fpu_kern_entered = 0;                                        \
+            int orig_use_aesni = aes->use_aesni;                             \
+            if (aes->use_aesni) {                                            \
+                SAVE_VECTOR_REGISTERS2();                                    \
+            }                                                                \
+            WC_DO_NOTHING
+
+    #define VECTOR_REGISTERS_POP                                             \
+            if (aes->use_aesni) {                                            \
+                RESTORE_VECTOR_REGISTERS();                                  \
+            }                                                                \
+            else {                                                           \
+                aes->use_aesni = orig_use_aesni;                             \
+            }                                                                \
+            WC_DO_NOTHING
+
+#endif /* WOLFSSL_AESNI || WOLFSSL_KERNEL_BENCHMARKS */
 
 #if !defined(SINGLE_THREADED)
     #define WC_MUTEX_OPS_INLINE
@@ -149,7 +233,8 @@ extern struct malloc_type M_WOLFSSL[1];
     typedef volatile int          wolfSSL_Atomic_Int;
     typedef volatile unsigned int wolfSSL_Atomic_Uint;
     #define WOLFSSL_ATOMIC_INITIALIZER(x) (x)
-    #define WOLFSSL_ATOMIC_LOAD(x)  (int)atomic_load_acq_int(&(x))
+    #define WOLFSSL_ATOMIC_LOAD(x) (int)atomic_load_acq_int(&(x))
+    #define WOLFSSL_ATOMIC_LOAD_UINT(x) atomic_load_acq_int(&(x))
     #define WOLFSSL_ATOMIC_STORE(x, v)  atomic_store_rel_int(&(x), (v))
     #define WOLFSSL_ATOMIC_OPS
 

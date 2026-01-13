@@ -123,9 +123,18 @@ then
     AM_CCASFLAGS="$AM_CCASFLAGS -DWOLFSSL_EXPERIMENTAL_SETTINGS"
 fi
 
+# Kernel module benchmark
+ENABLED_KERNEL_BENCHMARKS=""
+AC_ARG_ENABLE([kernel-benchmarks],
+    [AS_HELP_STRING([--enable-kernel-benchmarks],[Enable crypto benchmarking autorun at module load time for kernel module (default: disabled)])],
+    [ENABLED_KERNEL_BENCHMARKS=$enableval])
+if test "$ENABLED_KERNEL_BENCHMARKS" = "yes"
+then
+    AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_KERNEL_BENCHMARKS"
+fi
+AC_SUBST([ENABLED_KERNEL_BENCHMARKS])
 
 # Linux Kernel Module options (more options later)
-
 AC_ARG_ENABLE([linuxkm],
     [AS_HELP_STRING([--enable-linuxkm],[Enable Linux Kernel Module (default: disabled)])],
     [ENABLED_LINUXKM=$enableval],
@@ -722,10 +731,8 @@ AC_SUBST([ENABLED_LINUXKM_PIE])
 
 AC_ARG_ENABLE([linuxkm-benchmarks],
     [AS_HELP_STRING([--enable-linuxkm-benchmarks],[Enable crypto benchmarking autorun at module load time for Linux kernel module (default: disabled)])],
-    [ENABLED_KERNEL_BENCHMARKS=$enableval],
-    [ENABLED_KERNEL_BENCHMARKS=no]
-    )
-if test "$ENABLED_KERNEL_BENCHMARKS" = "yes"
+    [ENABLED_KERNEL_BENCHMARKS=$enableval])
+if test "$ENABLED_LINUXKM" = "yes" && test "$ENABLED_KERNEL_BENCHMARKS" = "yes"
 then
     AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_LINUXKM_BENCHMARKS"
 fi
@@ -814,17 +821,20 @@ AC_ARG_WITH([bsd-export-syms],
 
 if test "x$ENABLED_BSDKM" = "xyes"
 then
-    # wolfcrypt only, no-asm supported for now.
+    #AX_SIMD_CC_COMPILER_FLAGS
+    # wolfcrypt only for now.
     HAVE_KERNEL_MODE=yes
     KERNEL_MODE_DEFAULTS=yes
     ENABLED_NO_LIBRARY=yes
     ENABLED_BENCHMARK=no
-    ENABLED_ASM=no
+
+    # todo: remove, leaving for notes for now.
+    #ENABLED_ASM=no
+    #AM_CFLAGS="$AM_CFLAGS -DTFM_NO_ASM -DWOLFSSL_NO_ASM"
 
     output_objdir="$(realpath "$output_objdir")/bsdkm"
 
     AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_BSDKM -DWC_SIPHASH_NO_ASM"
-    AM_CFLAGS="$AM_CFLAGS -DTFM_NO_ASM -DWOLFSSL_NO_ASM"
     AM_CFLAGS="$AM_CFLAGS -DNO_DEV_RANDOM -DNO_WRITEV -DNO_STDIO_FILESYSTEM"
     AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_NO_SOCK -DWOLFSSL_USER_IO"
     AM_CFLAGS="$AM_CFLAGS -DXMALLOC_OVERRIDE -DWOLFCRYPT_ONLY"
