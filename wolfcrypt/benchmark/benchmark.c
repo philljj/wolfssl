@@ -2689,10 +2689,9 @@ static WC_INLINE void bench_stats_start(int* count, double* start)
 
 #if defined(WOLFSSL_BSDKM)
     #define bench_stats_start(count, start) do {                               \
-        fpu_kern_enter(curthread, NULL, FPU_KERN_NOCTX);                       \
+        fpu_kern_enter_wrapper();                                              \
         bench_stats_start(count, start);                                       \
     } while (0)
-
 #elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     #define bench_stats_start(count, start) do {                               \
         SAVE_VECTOR_REGISTERS(pr_err(                                          \
@@ -3172,7 +3171,7 @@ static void bench_stats_sym_finish(const char* desc, int useDeviceID,
     (void)ret;
 
 #if defined(WOLFSSL_BSDKM)
-    fpu_kern_leave(curthread, NULL);
+    fpu_kern_leave_wrapper();
 #elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
@@ -3572,7 +3571,7 @@ static void bench_stats_asym_finish_ex(const char* algo, int strength,
     (void)ret;
 
 #if defined(WOLFSSL_BSDKM)
-    fpu_kern_leave(curthread, NULL);
+    fpu_kern_leave_wrapper();
 #elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
