@@ -4758,9 +4758,6 @@ static void AesSetKey_C(Aes* aes, const byte* key, word32 keySz, int dir)
         byte   local[32];
         word32 localSz = 32;
     #endif
-    #if defined(WOLFSSL_BSDKM) && defined(WOLFSSL_AESNI)
-        int fpu_kern_entered = 0;
-    #endif /* WOLFSSL_BSDKM && WOLFSSL_AESNI */
 
         if (aes == NULL)
             return BAD_FUNC_ARG;

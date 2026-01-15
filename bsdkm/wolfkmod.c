@@ -57,6 +57,10 @@ static int wolfkmod_cleanup(void);
 static int wolfkmod_load(void);
 static int wolfkmod_unload(void);
 
+#if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
+    #include "bsdkm/x86_vecreg.c"
+#endif /* WOLFSSL_AESNI || WOLFSSL_KERNEL_BENCHMARKS*/
+
 #ifdef HAVE_FIPS
     #define WOLFKMOD_FIPS_ERR_MSG(hash) ({                                   \
         printf("In-core integrity hash check failure.\n");                   \
@@ -84,6 +88,14 @@ static int wolfkmod_unload(void);
 static int wolfkmod_init(void)
 {
     int error = 0;
+
+    #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
+    error = wolfkmod_vecreg_init();
+    if (error != 0) {
+        printf("error: wolfkmod_vecreg_init: %d\n", error);
+        return (ECANCELED);
+    }
+    #endif /* WOLFSSL_AESNI || WOLFSSL_KERNEL_BENCHMARKS*/
 
     #ifdef HAVE_FIPS
     error = wolfCrypt_SetCb_fips(wolfkmod_fips_cb);

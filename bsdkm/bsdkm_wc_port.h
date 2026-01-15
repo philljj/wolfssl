@@ -105,6 +105,9 @@ extern struct malloc_type M_WOLFSSL[1];
 
 
 #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
+    int  wolfkmod_vecreg_init(void);
+    int  wolfkmod_save_vecreg(int flags_unused);
+    void wolfkmod_restore_vecreg(void);
     /* wrapper defines for FPU_KERN(9).
      * /usr/src/sys/amd64/amd64/fpu.c
      * /usr/src/sys/amd64/include/pcb.h
@@ -144,37 +147,18 @@ extern struct malloc_type M_WOLFSSL[1];
             fpu_kern_leave(curthread, NULL);
     #endif
 
-    #define SAVE_VECTOR_REGISTERS(fail_clause)                               \
-        int fpu_kern_entered = 0;                                            \
-        if (is_fpu_kern_thread(0) ||                                         \
-            curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
+    #define SAVE_VECTOR_REGISTERS(fail_clause) {                             \
+        int _svr_ret = wolfkmod_save_vecreg(0);                              \
+        if (_svr_ret != 0) {                                                 \
+            fail_clause                                                      \
         }                                                                    \
-        else {                                                               \
-            wolfkmod_fpu_kern_enter();                                       \
-            fpu_kern_entered = 1;                                            \
-        }                                                                    \
-        (int) 0;                                                             \
+    }
 
+    #define SAVE_VECTOR_REGISTERS2() wolfkmod_save_vecreg(0)
 
-    #define SAVE_VECTOR_REGISTERS2() ({                                      \
-        if (is_fpu_kern_thread(0) ||                                         \
-            curthread->td_pcb->pcb_flags & PCB_KERNFPU) {                    \
-        }                                                                    \
-        else {                                                               \
-            wolfkmod_fpu_kern_enter();                                       \
-            fpu_kern_entered = 1;                                            \
-        }                                                                    \
-        (int) 0;                                                             \
-    })
-
-    #define RESTORE_VECTOR_REGISTERS()                                       \
-        if (fpu_kern_entered) {                                              \
-            wolfkmod_fpu_kern_leave();                                       \
-            fpu_kern_entered = 0;                                            \
-        }                                                                    \
+    #define RESTORE_VECTOR_REGISTERS() wolfkmod_restore_vecreg()
 
     #define VECTOR_REGISTERS_PUSH                                            \
-            int fpu_kern_entered = 0;                                        \
             int orig_use_aesni = aes->use_aesni;                             \
             if (aes->use_aesni) {                                            \
                 SAVE_VECTOR_REGISTERS2();                                    \
