@@ -68,7 +68,6 @@ int wolfkmod_save_vecreg(int flags_unused)
     if (curthread->td_pcb->pcb_flags & PCB_KERNFPU) {
         /* fpu context already active. increment nesting level. */
         fpu_states[PCPU_GET(cpuid)].nest++;
-        wolfkmod_print_curthread();
     }
     else {
         /* after calling fpu_kern_enter():
@@ -101,7 +100,6 @@ void wolfkmod_restore_vecreg(void)
         /* decrement the nesting level. */
         if (fpu_states[PCPU_GET(cpuid)].nest > 0) {
             fpu_states[PCPU_GET(cpuid)].nest--;
-            wolfkmod_print_curthread();
         }
 
         /* call fpu_kern_leave if last level. */
