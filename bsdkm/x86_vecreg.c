@@ -32,7 +32,7 @@ struct wolfkmod_fpu_state_t {
 
 typedef struct wolfkmod_fpu_state_t wolfkmod_fpu_state_t;
 
-wolfkmod_fpu_state_t * fpu_states = NULL;
+static wolfkmod_fpu_state_t * fpu_states = NULL;
 
 int wolfkmod_vecreg_init(void)
 {
@@ -55,7 +55,7 @@ void wolfkmod_vecreg_exit(void)
     return;
 }
 
-int wolfkmod_save_vecreg(int flags_unused)
+int wolfkmod_vecreg_save(int flags_unused)
 {
     (void)flags_unused;
 
@@ -88,7 +88,7 @@ int wolfkmod_save_vecreg(int flags_unused)
     return (0);
 }
 
-void wolfkmod_restore_vecreg(void)
+void wolfkmod_vecreg_restore(void)
 {
     if (is_fpu_kern_thread(0)) {
         /* kernel fpu threads are special, do nothing. They own a

@@ -107,8 +107,8 @@ extern struct malloc_type M_WOLFSSL[1];
 #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
     int  wolfkmod_vecreg_init(void);
     void wolfkmod_vecreg_exit(void);
-    int  wolfkmod_save_vecreg(int flags_unused);
-    void wolfkmod_restore_vecreg(void);
+    int  wolfkmod_vecreg_save(int flags_unused);
+    void wolfkmod_vecreg_restore(void);
     /* wrapper defines for FPU_KERN(9).
      * /usr/src/sys/amd64/amd64/fpu.c
      * /usr/src/sys/amd64/include/pcb.h
@@ -149,15 +149,15 @@ extern struct malloc_type M_WOLFSSL[1];
     #endif
 
     #define SAVE_VECTOR_REGISTERS(fail_clause) {                             \
-        int _svr_ret = wolfkmod_save_vecreg(0);                              \
+        int _svr_ret = wolfkmod_vecreg_save(0);                              \
         if (_svr_ret != 0) {                                                 \
             fail_clause                                                      \
         }                                                                    \
     }
 
-    #define SAVE_VECTOR_REGISTERS2() wolfkmod_save_vecreg(0)
+    #define SAVE_VECTOR_REGISTERS2() wolfkmod_vecreg_save(0)
 
-    #define RESTORE_VECTOR_REGISTERS() wolfkmod_restore_vecreg()
+    #define RESTORE_VECTOR_REGISTERS() wolfkmod_vecreg_restore()
 
     #define VECTOR_REGISTERS_PUSH                                            \
             int orig_use_aesni = aes->use_aesni;                             \
