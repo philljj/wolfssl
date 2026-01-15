@@ -205,6 +205,10 @@ static int wolfkmod_cleanup(void)
            " cleanup complete.\n");
     #endif /* WOLFSSL_BSDKM_VERBOSE_DEBUG */
 
+    #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
+    wolfkmod_vecreg_exit();
+    #endif /* WOLFSSL_AESNI || WOLFSSL_KERNEL_BENCHMARKS*/
+
     return (0);
 }
 

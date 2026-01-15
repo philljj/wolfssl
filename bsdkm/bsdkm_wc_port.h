@@ -106,6 +106,7 @@ extern struct malloc_type M_WOLFSSL[1];
 
 #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_KERNEL_BENCHMARKS)
     int  wolfkmod_vecreg_init(void);
+    void wolfkmod_vecreg_exit(void);
     int  wolfkmod_save_vecreg(int flags_unused);
     void wolfkmod_restore_vecreg(void);
     /* wrapper defines for FPU_KERN(9).

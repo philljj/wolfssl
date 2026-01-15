@@ -2687,14 +2687,9 @@ static WC_INLINE void bench_stats_start(int* count, double* start)
 #endif
 }
 
-#if defined(WOLFSSL_BSDKM)
+#if defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     #define bench_stats_start(count, start) do {                               \
-        wolfkmod_fpu_kern_enter();                                              \
-        bench_stats_start(count, start);                                       \
-    } while (0)
-#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
-    #define bench_stats_start(count, start) do {                               \
-        SAVE_VECTOR_REGISTERS(pr_err(                                          \
+        SAVE_VECTOR_REGISTERS(WOLFSSL_DEBUG_PRINTF(                                          \
             "ERROR: SAVE_VECTOR_REGISTERS failed for benchmark run.");         \
                               return; );                                       \
         bench_stats_start(count, start);                                       \
@@ -3170,9 +3165,7 @@ static void bench_stats_sym_finish(const char* desc, int useDeviceID,
     (void)useDeviceID;
     (void)ret;
 
-#if defined(WOLFSSL_BSDKM)
-    wolfkmod_fpu_kern_leave();
-#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
+#if defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
     kernel_fpu_end();
@@ -3570,9 +3563,7 @@ static void bench_stats_asym_finish_ex(const char* algo, int strength,
     (void)useDeviceID;
     (void)ret;
 
-#if defined(WOLFSSL_BSDKM)
-    wolfkmod_fpu_kern_leave();
-#elif defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
+#if defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS)
     RESTORE_VECTOR_REGISTERS();
 #elif defined(WOLFSSL_LINUXKM)
     kernel_fpu_end();

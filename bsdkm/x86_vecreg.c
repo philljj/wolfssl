@@ -45,15 +45,38 @@ int wolfkmod_vecreg_init(void)
     return (0);
 }
 
+void wolfkmod_vecreg_exit(void)
+{
+    if (fpu_states != NULL) {
+        free(fpu_states, M_WOLFSSL);
+        fpu_states = NULL;
+    }
+
+    return;
+}
+
 int wolfkmod_save_vecreg(int flags_unused)
 {
     (void)flags_unused;
 
-    if (is_fpu_kern_thread(0) || curthread->td_pcb->pcb_flags & PCB_KERNFPU) {
+    if (is_fpu_kern_thread(0)) {
+        /* kernel fpu threads are special, do nothing. They own a
+         * persistent, dedicated fpu context. */
+        return (0);
+    }
+
+    if (curthread->td_pcb->pcb_flags & PCB_KERNFPU) {
+        /* fpu context already active. increment nesting level. */
         fpu_states[PCPU_GET(cpuid)].nest++;
+        wolfkmod_print_curthread();
     }
     else {
+        /* after calling fpu_kern_enter():
+         *   - kernel fpu is enabled
+         *   - migration is disabled
+         *   - soft preempts are disabled */
         wolfkmod_fpu_kern_enter();
+
         if (fpu_states[PCPU_GET(cpuid)].nest != 0) {
             printf("error: wolfkmod_fpu_kern_enter() with nest: %d\n",
                    fpu_states[PCPU_GET(cpuid)].nest);
@@ -68,11 +91,20 @@ int wolfkmod_save_vecreg(int flags_unused)
 
 void wolfkmod_restore_vecreg(void)
 {
-    if (is_fpu_kern_thread(0) || curthread->td_pcb->pcb_flags & PCB_KERNFPU) {
+    if (is_fpu_kern_thread(0)) {
+        /* kernel fpu threads are special, do nothing. They own a
+         * persistent, dedicated fpu context. */
+        return;
+    }
+
+    if (curthread->td_pcb->pcb_flags & PCB_KERNFPU) {
+        /* decrement the nesting level. */
         if (fpu_states[PCPU_GET(cpuid)].nest > 0) {
             fpu_states[PCPU_GET(cpuid)].nest--;
+            wolfkmod_print_curthread();
         }
 
+        /* call fpu_kern_leave if last level. */
         if (fpu_states[PCPU_GET(cpuid)].nest == 0) {
             wolfkmod_fpu_kern_leave();
         }
