@@ -61,7 +61,18 @@ OBJS += ${WOLFSSL_OBJS}
   CFLAGS.aes.c += -msse -msse2 -msse4.1 -maes -mpclmul
   CFLAGS.aes.c := ${CFLAGS.aes.c:N-nostdinc}
   CFLAGS.aes.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
-  CFLAGS.benchmark.c += -msse -msse2 -msse4.1 -maes -mpclmul
+
+  CFLAGS.poly1305.c += -msse -msse2 -msse4.1 -maes -mpclmul
+  CFLAGS.poly1305.c := ${CFLAGS.aes.c:N-nostdinc}
+  CFLAGS.poly1305.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
+
+  CFLAGS.chacha.c += -msse -msse2 -msse4.1 -maes -mpclmul
+  CFLAGS.chacha.c := ${CFLAGS.aes.c:N-nostdinc}
+  CFLAGS.chacha.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
+
+  CFLAGS.sha.c += -msse -msse2 -msse4.1 -maes -mpclmul -mavx -mavx2
+  CFLAGS.sha256.c += -msse -msse2 -msse4.1 -maes -mpclmul -mavx -mavx2
+  CFLAGS.benchmark.c += -msse -msse2 -msse4.1 -maes -mpclmul -mavx -mavx2
   CFLAGS.benchmark.c := ${CFLAGS.aes.c:N-nostdinc}
   CFLAGS.benchmark.c += -I${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
   .PATH: ${SYSDIR}/../contrib/llvm-project/clang/lib/Headers
