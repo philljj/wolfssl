@@ -145,6 +145,12 @@ AC_ARG_ENABLE([freebsdkm],
     [ENABLED_BSDKM=no]
     )
 
+AC_ARG_ENABLE([freebsdkm-crypto-register],
+    [AS_HELP_STRING([--enable-freebsdkm-crypto-register],[Register wolfCrypt implementations with the FreeBSD kernel opencrypto framework. (default: disabled)])],
+    [ENABLED_BSDKM_REGISTER=$enableval],
+    [ENABLED_BSDKM_REGISTER=no]
+    )
+
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h netinet/in.h stddef.h time.h sys/ioctl.h sys/socket.h sys/time.h errno.h sys/un.h ctype.h sys/random.h])
 AC_CHECK_LIB([network],[socket])
 AC_C_BIGENDIAN
@@ -842,6 +848,16 @@ then
     AC_SUBST([KERNEL_ROOT])
     AC_SUBST([BSDKM_EXPORT_SYMS])
 
+fi
+
+if test "x$ENABLED_BSDKM_REGISTER" = "xyes"
+then
+    if test "$ENABLED_AESGCM" != "no" && test "$ENABLED_AESGCM_STREAM" = "no" && test "$enable_aesgcm_stream" != "no" && (test "$ENABLED_FIPS" = "no" || test $HAVE_FIPS_VERSION -ge 6); then
+        ENABLED_AESGCM_STREAM=yes
+    fi
+
+    AM_CFLAGS="$AM_CFLAGS -DBSDKM_CRYPTO_REGISTER"
+    AC_SUBST([ENABLED_BSDKM_REGISTER])
 fi
 # end FreeBSD configure
 
