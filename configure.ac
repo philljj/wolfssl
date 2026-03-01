@@ -185,6 +185,17 @@ AC_ARG_ENABLE([freebsdkm-crypto-register],
     [ENABLED_BSDKM_REGISTER=no]
     )
 
+# wolfzfs support
+AC_ARG_ENABLE([wolfzfs],
+    [AS_HELP_STRING([--enable-wolfzfs],[Enable wolfZFS kernel support (default: disabled)])],
+    [ENABLED_WOLFZFS=$enableval],
+    [ENABLED_WOLFZFS=no]
+    )
+if test "x$ENABLED_WOLFZFS" = "xyes"; then
+    ENABLED_AESGCM_STREAM="yes"
+    AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_AES_DIRECT"
+fi
+
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h netinet/in.h stddef.h time.h sys/ioctl.h sys/socket.h sys/time.h errno.h sys/un.h ctype.h sys/random.h])
 AC_CHECK_LIB([network],[socket])
 AC_C_BIGENDIAN
@@ -193,7 +204,8 @@ if test "x$ENABLED_BSDKM" = "xyes"; then
     # The <stdatomic.h> header should not be included in freebsd kernel build.
     # Look for <machine/atomic.h> instead.
     AC_CHECK_HEADER(machine/atomic.h, [AM_CPPFLAGS="$AM_CPPFLAGS -DWOLFSSL_HAVE_ATOMIC_H"],[])
-else
+elif test "x$ENABLED_WOLFZFS" = "xno"; then
+    # Don't use stdatomic.h with wolfzfs. It expects gcc builtins.
     AC_CHECK_HEADER(stdatomic.h, [AM_CPPFLAGS="$AM_CPPFLAGS -DWOLFSSL_HAVE_ATOMIC_H"],[])
 fi
 AC_CHECK_HEADER(assert.h, [AM_CPPFLAGS="$AM_CPPFLAGS -DWOLFSSL_HAVE_ASSERT_H"],[])
