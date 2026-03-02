@@ -192,6 +192,8 @@ AC_ARG_ENABLE([wolfzfs],
     [ENABLED_WOLFZFS=no]
     )
 if test "x$ENABLED_WOLFZFS" = "xyes"; then
+    # zfs uses ccm and gcm.
+    ENABLED_AESCCM="yes"
     ENABLED_AESGCM_STREAM="yes"
     AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_AES_DIRECT"
 fi
@@ -3318,7 +3320,8 @@ AC_ARG_ENABLE([aesccm],
     [ ENABLED_AESCCM=no ]
     )
 
-if test "$ENABLED_AESCCM" = "yes" || test "$ENABLED_WOLFENGINE" = "yes"
+if test "$ENABLED_AESCCM" = "yes" || test "$ENABLED_WOLFENGINE" = "yes" ||
+   test "$ENABLED_WOLFZFS" = "yes"
 then
     AM_CFLAGS="$AM_CFLAGS -DHAVE_AESCCM"
     AM_CCASFLAGS="$AM_CCASFLAGS -DHAVE_AESCCM"
