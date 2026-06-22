@@ -10,7 +10,7 @@ NOTE:
 * liboqs integrations for ML-KEM, ML-DSA, and SLH-DSA (SPHINCS+) have been removed in favor of the native implementations; the deprecated liblms and libxmss integrations have also been removed.
 * **BREAKING (RFC 6960 4.2.2.2)**: OCSP responder authorization is now strictly enforced. Removes the non-compliant `CheckOcspResponderChain()` fallback, which authorized any OCSP responder cert issued by an ancestor of the target's issuer; RFC 6960 4.2.2.2 requires direct issuance by the CA identified in the request. Also removes the now-unused `WOLFSSL_NO_OCSP_ISSUER_CHAIN_CHECK` macro and the `vp` parameter from `CheckOcspResponder()`.
 
-PR stands for Pull Request, and PR <NUMBER> references a GitHub pull request number where the code change was added.
+PR stands for Pull Request, and PR (NUMBER) references a GitHub pull request number where the code change was added.
 
 ## Vulnerabilities
 
