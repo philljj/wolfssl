@@ -1819,7 +1819,7 @@ enum Misc {
     MAX_WOLFSSL_FILE_SIZE = 1024UL * 1024UL * 4,  /* 4 mb file size alloc limit */
 #endif
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
-    MAX_WOLFSSL_CRYPTO_POLICY_SIZE = 1024UL, /* Crypto-policy file is one line.
+    MAX_WOLFSSL_CRYPTO_POLICY_SIZE = 4096UL, /* Crypto-policy file is one line.
                                               * It should not be large. */
     MIN_WOLFSSL_SEC_LEVEL = 0,
     MAX_WOLFSSL_SEC_LEVEL = 5,
@@ -6719,11 +6719,37 @@ struct WOLFSSL {
 };
 
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
+#define WOLF_CP_MAX_TOKENS      64
+#define WOLF_CP_MAX_TOKEN_LEN   48
+#define WOLF_CP_MAX_LINE       256
+
+typedef struct {
+    char tok[WOLF_CP_MAX_TOKENS][WOLF_CP_MAX_TOKEN_LEN];
+    int  count;
+} WolfCPList;
+
+typedef struct {
+    int        version;
+    int        allowlist;
+    WolfCPList protocols;
+    WolfCPList ciphers;
+    WolfCPList kx;
+    WolfCPList macs;
+    WolfCPList hashes;
+    WolfCPList groups;
+    WolfCPList sigs;
+    long       min_rsa_bits;
+    long       min_dh_bits;
+    long       min_dsa_bits;
+    int        security_level;
+} WolfGranularPolicy;
+
 #define WOLFSSL_SECLEVEL_STR "@SECLEVEL="
 struct SystemCryptoPolicy {
     int    enabled;
     int    secLevel;
     char   str[MAX_WOLFSSL_CRYPTO_POLICY_SIZE + 1]; /* + 1 for null term */
+    WolfGranularPolicy gran;
 };
 #endif /* WOLFSSL_SYS_CRYPTO_POLICY */
 

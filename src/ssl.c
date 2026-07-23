@@ -152,6 +152,7 @@
 #if !defined(WOLFCRYPT_ONLY) && defined(WOLFSSL_SYS_CRYPTO_POLICY)
 /* The system wide crypto-policy. Configured by wolfSSL_crypto_policy_enable.
  * */
+#include "crypto_policy.h"
 static struct SystemCryptoPolicy crypto_policy;
 #endif /* !WOLFCRYPT_ONLY && WOLFSSL_SYS_CRYPTO_POLICY */
 
@@ -2639,6 +2640,7 @@ int wolfSSL_crypto_policy_enable(const char * policy_file)
     XFILE   file;
     long    sz = 0;
     size_t  n_read = 0;
+    char *  gran_buf = NULL;
 
     WOLFSSL_ENTER("wolfSSL_crypto_policy_enable");
 
@@ -2691,18 +2693,47 @@ int wolfSSL_crypto_policy_enable(const char * policy_file)
         return WOLFSSL_BAD_FILE;
     }
 
-    n_read = XFREAD(crypto_policy.str, 1, sz, file);
+    gran_buf = (char *)XMALLOC((size_t)sz + 1, NULL,
+                               DYNAMIC_TYPE_TMP_BUFFER);
+    if (gran_buf == NULL) {
+        XFCLOSE(file);
+        WOLFSSL_MSG("error: crypto policy: out of memory");
+        return MEMORY_E;
+    }
+
+    n_read = XFREAD(gran_buf, 1, (size_t)sz, file);
     XFCLOSE(file);
 
     if (n_read != (size_t) sz) {
         WOLFSSL_MSG_EX("error: crypto policy file %s: read %zu, "
                        "expected %ld", policy_file, n_read, sz);
+        XFREE(gran_buf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        return WOLFSSL_BAD_FILE;
+    }
+    gran_buf[sz] = '\0';
+
+    char err[128];
+    int  rc = wolfSSL_crypto_policy_parse_granular(
+                  gran_buf, &crypto_policy.gran, err, sizeof(err));
+    XFREE(gran_buf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    if (rc != WOLF_CP_OK) {
+        WOLFSSL_MSG_EX("granular crypto policy parse failed: %s", err);
+        XMEMSET(&crypto_policy.gran, 0, sizeof(crypto_policy.gran));
         return WOLFSSL_BAD_FILE;
     }
 
-    crypto_policy.str[n_read] = '\0';
+    crypto_policy.secLevel = crypto_policy.gran.security_level > 0
+                             ? crypto_policy.gran.security_level
+                             : 0;
 
-    return crypto_policy_parse();
+    rc = wolfSSL_crypto_policy_derive_cipher_list(&crypto_policy.gran,
+                                                  crypto_policy.str,
+                                                  sizeof(crypto_policy.str));
+    if (rc != WOLF_CP_OK) {
+        crypto_policy.str[0] = '\0';
+    }
+    crypto_policy.enabled = 1;
+    return WOLFSSL_SUCCESS;
 }
 #endif /* ! NO_FILESYSTEM */
 
