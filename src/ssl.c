@@ -2555,66 +2555,6 @@ int wolfSSL_Init(void)
 }
 
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
-/* Helper function for wolfSSL_crypto_policy_enable and
- * wolfSSL_crypto_policy_enable_buffer.
- *
- * Parses the crypto policy string, verifies values,
- * and sets in global crypto policy struct. Not thread
- * safe. String length has already been verified.
- *
- * Returns WOLFSSL_SUCCESS on success.
- * Returns CRYPTO_POLICY_FORBIDDEN if already enabled.
- * Returns < 0 on misc error.
- * */
-static int crypto_policy_parse(void)
-{
-    const char * hdr = WOLFSSL_SECLEVEL_STR;
-    int          sec_level = 0;
-    size_t       i = 0;
-
-    /* All policies should begin with "@SECLEVEL=<N>" (N={0..5}) followed
-     * by bulk cipher list. */
-    if (XMEMCMP(crypto_policy.str, hdr, strlen(hdr)) != 0) {
-        WOLFSSL_MSG("error: crypto policy: invalid header");
-        return WOLFSSL_BAD_FILE;
-    }
-
-    {
-        /* Extract the security level. */
-        char *       policy_mem = crypto_policy.str;
-        policy_mem += strlen(hdr);
-        sec_level = (int) (*policy_mem - '0');
-    }
-
-    if (sec_level < MIN_WOLFSSL_SEC_LEVEL ||
-        sec_level > MAX_WOLFSSL_SEC_LEVEL) {
-        WOLFSSL_MSG_EX("error: invalid SECLEVEL: %d", sec_level);
-        return WOLFSSL_BAD_FILE;
-    }
-
-    /* Remove trailing '\r' or '\n'. */
-    for (i = 0; i < MAX_WOLFSSL_CRYPTO_POLICY_SIZE; ++i) {
-        if (crypto_policy.str[i] == '\0') {
-            break;
-        }
-
-        if (crypto_policy.str[i] == '\r' || crypto_policy.str[i] == '\n') {
-            crypto_policy.str[i] = '\0';
-            break;
-        }
-    }
-
-    #if defined(DEBUG_WOLFSSL_VERBOSE)
-    WOLFSSL_MSG_EX("info: SECLEVEL=%d", sec_level);
-    WOLFSSL_MSG_EX("info: using crypto-policy file: %s, %ld", policy_file, sz);
-    #endif /* DEBUG_WOLFSSL_VERBOSE */
-
-    crypto_policy.secLevel = sec_level;
-    crypto_policy.enabled = 1;
-
-    return WOLFSSL_SUCCESS;
-}
-
 #ifndef NO_FILESYSTEM
 /* Enables wolfSSL system wide crypto-policy, using the given policy
  * file arg. If NULL is passed, then the default system crypto-policy
@@ -2641,6 +2581,7 @@ int wolfSSL_crypto_policy_enable(const char * policy_file)
     long    sz = 0;
     size_t  n_read = 0;
     char *  gran_buf = NULL;
+    int     ret = 0;
 
     WOLFSSL_ENTER("wolfSSL_crypto_policy_enable");
 
@@ -2712,10 +2653,26 @@ int wolfSSL_crypto_policy_enable(const char * policy_file)
     }
     gran_buf[sz] = '\0';
 
+    ret = wolfSSL_crypto_policy_enable_buffer(gran_buf);
+
+    XFREE(gran_buf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+
+    return ret;
+}
+#endif /* ! NO_FILESYSTEM */
+
+/* Same behavior as wolfSSL_crypto_policy_enable, but loads
+ * via memory buf instead of file.
+ *
+ * Returns WOLFSSL_SUCCESS on success.
+ * Returns CRYPTO_POLICY_FORBIDDEN if already enabled.
+ * Returns < 0 on misc error.
+ * */
+int wolfSSL_crypto_policy_enable_buffer(const char * buf)
+{
     char err[128];
     int  rc = wolfSSL_crypto_policy_parse_granular(
-                  gran_buf, &crypto_policy.gran, err, sizeof(err));
-    XFREE(gran_buf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+                  buf, &crypto_policy.gran, err, sizeof(err));
     if (rc != WOLF_CP_OK) {
         WOLFSSL_MSG_EX("granular crypto policy parse failed: %s", err);
         XMEMSET(&crypto_policy.gran, 0, sizeof(crypto_policy.gran));
@@ -2731,44 +2688,11 @@ int wolfSSL_crypto_policy_enable(const char * policy_file)
                                                   sizeof(crypto_policy.str));
     if (rc != WOLF_CP_OK) {
         crypto_policy.str[0] = '\0';
+        return WOLFSSL_BAD_FILE;
     }
     crypto_policy.enabled = 1;
+
     return WOLFSSL_SUCCESS;
-}
-#endif /* ! NO_FILESYSTEM */
-
-/* Same behavior as wolfSSL_crypto_policy_enable, but loads
- * via memory buf instead of file.
- *
- * Returns WOLFSSL_SUCCESS on success.
- * Returns CRYPTO_POLICY_FORBIDDEN if already enabled.
- * Returns < 0 on misc error.
- * */
-int wolfSSL_crypto_policy_enable_buffer(const char * buf)
-{
-    size_t sz = 0;
-
-    WOLFSSL_ENTER("wolfSSL_crypto_policy_enable_buffer");
-
-    if (wolfSSL_crypto_policy_is_enabled()) {
-        WOLFSSL_MSG_EX("error: crypto policy already enabled");
-        return CRYPTO_POLICY_FORBIDDEN;
-    }
-
-    if (buf == NULL || *buf == '\0') {
-        return BAD_FUNC_ARG;
-    }
-
-    sz = XSTRLEN(buf);
-
-    if (sz == 0 || sz > MAX_WOLFSSL_CRYPTO_POLICY_SIZE) {
-        return BAD_FUNC_ARG;
-    }
-
-    XMEMSET(&crypto_policy, 0, sizeof(crypto_policy));
-    XMEMCPY(crypto_policy.str, buf, sz);
-
-    return crypto_policy_parse();
 }
 
 /* Returns whether the system wide crypto-policy is enabled.

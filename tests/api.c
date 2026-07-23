@@ -29389,17 +29389,36 @@ static int test_wolfSSL_crypto_policy(void)
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY) && !defined(NO_TLS)
     int          rc = WC_NO_ERR_TRACE(WOLFSSL_FAILURE);
     const char * policy_list[] = {
-        "examples/crypto_policies/legacy/wolfssl.txt",
-        "examples/crypto_policies/default/wolfssl.txt",
-        "examples/crypto_policies/future/wolfssl.txt",
+        "examples/crypto_policies/legacy/wolfssl-allowlist.txt",
+        "examples/crypto_policies/default/wolfssl-allowlist.txt",
+        "examples/crypto_policies/future/wolfssl-allowlist.txt",
     };
     const char * ciphers_list[] = {
-        "@SECLEVEL=1:EECDH:kRSA:EDH:PSK:DHEPSK:ECDHEPSK:RSAPSK"
-        ":!eNULL:!aNULL",
-        "@SECLEVEL=2:EECDH:kRSA:EDH:PSK:DHEPSK:ECDHEPSK:RSAPSK"
-        ":!RC4:!eNULL:!aNULL",
-        "@SECLEVEL=3:EECDH:EDH:PSK:DHEPSK:ECDHEPSK:!RSAPSK:!kRSA"
-        ":!AES128:!RC4:!eNULL:!aNULL:!SHA1",
+    /* legacy */
+    "TLS13-AES256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:"
+    "TLS13-AES128-GCM-SHA256:TLS13-AES128-CCM-SHA256:"
+    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:"
+    "ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-CHACHA20-POLY1305:"
+    "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+    "DHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:"
+    "ECDHE-RSA-AES128-SHA256:AES256-GCM-SHA384:AES128-GCM-SHA256",
+    /* default */
+    "TLS13-AES256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:"
+    "TLS13-AES128-GCM-SHA256:TLS13-AES128-CCM-SHA256:"
+    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:"
+    "ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-CHACHA20-POLY1305:"
+    "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+    "DHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:"
+    "ECDHE-RSA-AES128-SHA256:AES256-GCM-SHA384:AES128-GCM-SHA256",
+    /* future */
+    "TLS13-AES256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:"
+    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:"
+    "ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-CHACHA20-POLY1305",
     };
     int          seclevel_list[] = { 1, 2, 3 };
     int          i = 0;
@@ -29431,10 +29450,10 @@ static int test_wolfSSL_crypto_policy(void)
 
         if (ciphers != NULL) {
             n_diff = XSTRNCMP(ciphers, ciphers_list[i], strlen(ciphers));
-            #ifdef DEBUG_WOLFSSL
+            #ifdef DEBUG_CRYPTO_POLICY
             if (n_diff) {
-                printf("error: got \n%s, expected \n%s\n",
-                       ciphers, ciphers_list[i]);
+                printf("error: %s:\n got \n%s, expected \n%s\n",
+                       policy_list[i], ciphers, ciphers_list[i]);
             }
             #endif /* DEBUG_WOLFSSL */
             ExpectIntEQ(n_diff, 0);
@@ -29464,33 +29483,6 @@ static int test_wolfSSL_crypto_policy(void)
         if (ssl != NULL) {
             wolfSSL_free(ssl);
             ssl = NULL;
-        }
-
-        wolfSSL_crypto_policy_disable();
-
-        /* Do the same test by buffer. */
-        rc = wolfSSL_crypto_policy_enable_buffer(ciphers_list[i]);
-        ExpectIntEQ(rc, WOLFSSL_SUCCESS);
-
-        rc = wolfSSL_crypto_policy_is_enabled();
-        ExpectIntEQ(rc, 1);
-
-        /* Security level and ciphers should match what is expected. */
-        rc = wolfSSL_crypto_policy_get_level();
-        ExpectIntEQ(rc, seclevel_list[i]);
-
-        ciphers = wolfSSL_crypto_policy_get_ciphers();
-        ExpectNotNull(ciphers);
-
-        if (ciphers != NULL) {
-            n_diff = XSTRNCMP(ciphers, ciphers_list[i], strlen(ciphers));
-            #ifdef DEBUG_WOLFSSL
-            if (n_diff) {
-                printf("error: got \n%s, expected \n%s\n",
-                       ciphers, ciphers_list[i]);
-            }
-            #endif /* DEBUG_WOLFSSL */
-            ExpectIntEQ(n_diff, 0);
         }
 
         wolfSSL_crypto_policy_disable();
