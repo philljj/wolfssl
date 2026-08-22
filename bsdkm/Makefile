@@ -25,9 +25,17 @@ CFLAGS += $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS)
 
 # FreeBSD make does not support GNU make's patsubst and related. Filter
 # through sed instead.
+#WOLFSSL_OBJS != echo ${src_libwolfssl_la_OBJECTS} | \
+#  sed 's|src_libwolfssl_la-||g' | sed 's|\.lo|.o|g' | \
+#  sed 's|wolfcrypt/src/|${WOLFSSL_DIR}/wolfcrypt/src/|g'
+
 WOLFSSL_OBJS != echo ${src_libwolfssl_la_OBJECTS} | \
-  sed 's|src_libwolfssl_la-||g' | sed 's|\.lo|.o|g' | \
-  sed 's|wolfcrypt/src/|${WOLFSSL_DIR}/wolfcrypt/src/|g'
+  sed -e 's|wolfcrypt/src/src_libwolfssl_la-|${WOLFSSL_DIR}/wolfcrypt/src/|g' \
+      -e 's|src/libwolfssl_la-|${WOLFSSL_DIR}/src/|g' \
+      -e 's|\.lo|.o|g'
+
+info:
+	@echo "WOLFSSL_OBJS=${WOLFSSL_OBJS}"
 
 # wolfcrypt test
 .if ${ENABLED_CRYPT_TESTS} == "yes"

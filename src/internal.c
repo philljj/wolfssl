@@ -11574,7 +11574,11 @@ ProtocolVersion MakeDTLSv1_3(void)
     {
         return (word32)time(NULL);
     }
-
+#elif defined(WOLFSSL_BSDKM)
+    word32 LowResTimer(void)
+    {
+        return (word32)XTIME(0);
+    }
 #else
     /* Posix style time */
     #if !defined(USER_TIME) && !defined(USE_WOLF_TM)

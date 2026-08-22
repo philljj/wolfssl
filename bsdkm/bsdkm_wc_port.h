@@ -41,7 +41,9 @@
 #define NO_THREAD_LS
 #define NO_ATTRIBUTE_CONSTRUCTOR
 
-/* <time.h> and TIME(3) are userspace only in FreeBSD.
+/* FreeBSD time is a bit diffferent than linux:
+ *   - <time.h>     and TIME(3) are userspace only in FreeBSD.
+ *   - <sys/time.h> and TIME(9) are the kernel equivalents.
  * Use a small wrapper around <sys/time.h> time_second instead. */
 #include <sys/time.h>
 static inline time_t wolfkmod_time(time_t * tloc) {
@@ -52,6 +54,9 @@ static inline time_t wolfkmod_time(time_t * tloc) {
     return _now;
 }
 #define XTIME wolfkmod_time
+#define WOLFSSL_GMTIME
+#define NO_TIMEVAL 1
+#define USE_WOLF_TM
 
 /* needed to prevent wolfcrypt/src/asn.c version shadowing
  * extern global version from /usr/src/sys/sys/systm.h */
@@ -59,6 +64,7 @@ static inline time_t wolfkmod_time(time_t * tloc) {
 
 /* printf and logging defines */
 #define wc_km_printf            printf
+#define WOLFSSL_DEBUG_PRINTF    printf
 #define WOLFSSL_DEBUG_PRINTF_FN printf
 
 /* str and char utility functions */
@@ -218,6 +224,16 @@ extern struct malloc_type M_WOLFSSL[1];
         #define ATOMIC_INIT(x) (x)
     #endif
 #endif /* WOLFSSL_HAVE_ATOMIC_H && !WOLFSSL_NO_ATOMICS */
+
+
+#if !defined(WOLFCRYPT_ONLY)
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/socketvar.h>
+#include <sys/uio.h>
+typedef struct socket * SOCKET_T;
+#define SOCKET_INVALID NULL
+#endif /* !WOLFCRYPT_ONLY */
 
 #endif /* WOLFSSL_BSDKM */
 #endif /* BSDKM_WC_PORT_H */

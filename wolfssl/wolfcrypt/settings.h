@@ -4501,9 +4501,6 @@
         #include <config.h>
         #undef HAVE_CONFIG_H
     #endif
-    #ifndef NO_ASN_TIME
-        #define NO_ASN_TIME
-    #endif
     #ifndef NO_DEV_RANDOM
         #define NO_DEV_RANDOM
     #endif
@@ -4522,8 +4519,14 @@
     #ifndef WOLFSSL_DH_CONST
         #define WOLFSSL_DH_CONST
     #endif
+    #if 0
+    /* bsdkm tls io still work in progress. */
     #ifndef WOLFSSL_USER_IO
         #define WOLFSSL_USER_IO
+    #endif
+    #endif /* if 0 */
+    #ifndef USE_WOLFSSL_IO
+        #define USE_WOLFSSL_IO
     #endif
     #ifndef USE_WOLF_STRTOK
         #define USE_WOLF_STRTOK
@@ -5932,6 +5935,11 @@ blinding by defining WC_BLINDING_NO_RNG_ACKNOWLEDGE_WEAKNESS."
 #endif
 
 #if defined(WC_RNG_BANK_SUPPORT) && defined(NO_ASN_TIME)
+    #undef WC_RNG_BANK_SUPPORT
+#endif
+
+/* rng bank not supported in BSDKM yet */
+#if defined(WC_RNG_BANK_SUPPORT) && defined(WOLFSSL_BSDKM)
     #undef WC_RNG_BANK_SUPPORT
 #endif
 

@@ -1524,6 +1524,8 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
     #ifndef SOCKET_INVALID
         #define SOCKET_INVALID INVALID_SOCKET
     #endif
+#elif defined(WOLFSSL_BSDKM)
+    /* defined in bsdkm_wc_port.h */
 #else
     #ifndef SOCKET_T
         typedef int SOCKET_T;

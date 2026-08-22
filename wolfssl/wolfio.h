@@ -502,6 +502,9 @@
 #elif defined(WOLFSSL_LINUXKM)
     #define SEND_FUNCTION linuxkm_send
     #define RECV_FUNCTION linuxkm_recv
+#elif defined(WOLFSSL_BSDKM)
+    #define SEND_FUNCTION bsdkm_send
+    #define RECV_FUNCTION bsdkm_recv
 #elif defined(WOLFSSL_SGX)
     #define SEND_FUNCTION send
     #define RECV_FUNCTION recv

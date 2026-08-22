@@ -67,6 +67,7 @@ int Nucleus_Net_Errno;
         #elif defined(WOLFSSL_NUCLEUS_1_2)
         #elif defined(WOLFSSL_LINUXKM)
             /* the requisite linux/net.h is included in wc_port.h, with incompatible warnings masked out. */
+        #elif defined(WOLFSSL_BSDKM)
         #elif defined(WOLFSSL_ATMEL)
         #elif defined(INTIME_RTOS)
             #include <netdb.h>
@@ -105,7 +106,9 @@ int Nucleus_Net_Errno;
 
 
 #if defined(HAVE_HTTP_CLIENT)
+    #if !defined(NO_STDLIB_H)
     #include <stdlib.h>   /* strtol() */
+    #endif /* !NO_STDLIB_H */
 #endif
 
 /*
@@ -152,6 +155,8 @@ static WC_INLINE int wolfSSL_LastError(int err, SOCKET_T sd)
 #elif defined(EBSNET)
     return xn_getlasterror();
 #elif defined(WOLFSSL_LINUXKM)
+    return -err; /* Return provided error value with corrected sign. */
+#elif defined(WOLFSSL_BSDKM)
     return -err; /* Return provided error value with corrected sign. */
 #elif defined(WOLFSSL_EMNET)
     /* Any negative recv/send return is a SOCKET_ERROR sentinel under
@@ -425,7 +430,7 @@ int SslBioSend(WOLFSSL* ssl, char *buf, int sz, void *ctx)
 int EmbedReceive(WOLFSSL *ssl, char *buf, int sz, void *ctx)
 {
     int recvd;
-#ifndef WOLFSSL_LINUXKM
+#ifndef WOLFSSL_KERNEL_MODE
     int sd = *(int*)ctx;
 #else
     struct socket *sd = (struct socket*)ctx;
@@ -449,7 +454,7 @@ int EmbedReceive(WOLFSSL *ssl, char *buf, int sz, void *ctx)
 int EmbedSend(WOLFSSL* ssl, char *buf, int sz, void *ctx)
 {
     int sent;
-#ifndef WOLFSSL_LINUXKM
+#ifndef WOLFSSL_KERNEL_MODE
     int sd = *(int*)ctx;
 #else
     struct socket *sd = (struct socket*)ctx;
@@ -1251,6 +1256,78 @@ static int linuxkm_recv(struct socket *socket, void *buf, int size,
 }
 #endif /* WOLFSSL_LINUXKM */
 
+#ifdef WOLFSSL_BSDKM
+#include <sys/socket.h>
+#include <sys/socketvar.h>
+static int bsdkm_send(struct socket *so, void *buf, int size,
+                      unsigned int flags)
+{
+    struct iovec iov;
+    struct uio uio;
+    int ret;
+
+    if (size < 0) {
+        return -EINVAL;
+    }
+    if (size == 0) {
+        return 0;
+    }
+
+    iov.iov_base = buf;
+    iov.iov_len = (size_t)size;
+
+    memset(&uio, 0, sizeof(uio));
+    uio.uio_iov = &iov;
+    uio.uio_iovcnt = 1;
+    uio.uio_offset = 0;
+    uio.uio_resid = size;
+    uio.uio_segflg = UIO_SYSSPACE;
+    uio.uio_rw = UIO_WRITE;
+    uio.uio_td = curthread;
+
+    ret = sosend(so, NULL, &uio, NULL, NULL, flags, curthread);
+    if (ret != 0)
+        return -ret;
+
+    return size - (int)uio.uio_resid;
+}
+
+static int bsdkm_recv(struct socket *so, void *buf, int size,
+                      unsigned int flags)
+{
+    struct iovec iov;
+    struct uio uio;
+    int recv_flags;
+    int ret;
+
+    if (size < 0) {
+        return -EINVAL;
+    }
+    if (size == 0) {
+        return 0;
+    }
+
+    iov.iov_base = buf;
+    iov.iov_len = (size_t)size;
+
+    memset(&uio, 0, sizeof(uio));
+    uio.uio_iov = &iov;
+    uio.uio_iovcnt = 1;
+    uio.uio_offset = 0;
+    uio.uio_resid = size;
+    uio.uio_segflg = UIO_SYSSPACE;
+    uio.uio_rw = UIO_READ;
+    uio.uio_td = curthread;
+
+    recv_flags = flags;
+
+    ret = soreceive(so, NULL, &uio, NULL, NULL, &recv_flags);
+    if (ret != 0)
+        return -ret;
+
+    return size - (int)uio.uio_resid;
+}
+#endif /* WOLFSSL_BSDKM */
 
 int wolfIO_Recv(SOCKET_T sd, char *buf, int sz, int rdFlags)
 {
