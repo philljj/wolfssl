@@ -1826,6 +1826,7 @@ static int test_sanity_sessions(const sess_cache_t * cache_mem,
     int    ret = -1;
     size_t i = 0;
     size_t j = 0;
+    (void)what; /* only used in WOLFSSL_MSG_EX */
 
     /* walk sessions, check for expected values */
     for (i = 0; i < SESSION_ROWS; ++i) {
