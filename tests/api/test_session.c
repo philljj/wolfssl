@@ -1807,11 +1807,11 @@ static void test_set_sessions(sess_cache_t * cache_mem)
     }
 }
 
-#define field_null_or_fail(s, what, fld) do {                             \
+#define field_null_or_fail(what, s, name, fld) do {                       \
     if ((s)->fld != NULL) {                                               \
-        WOLFSSL_MSG_EX("error: s = %p, id = 0x%02x%02x, %s = %p",         \
-                       (s), (s)->sessionID[0], (s)->sessionID[1], (what), \
-                       (s)->fld);                                         \
+        WOLFSSL_MSG_EX("error: %s: s = %p, id = 0x%02x%02x, %s = %p",     \
+                       (what), (s), (s)->sessionID[0], (s)->sessionID[1], \
+                       (name), (s)->fld);                                 \
         ret = -1;                                                         \
         goto sanity_fail;                                                 \
     }                                                                     \
@@ -1820,7 +1820,8 @@ static void test_set_sessions(sess_cache_t * cache_mem)
 /* sanity check the restored session cache.
  * return  0 on success
  * return -1 on error */
-static int test_sanity_sessions(const sess_cache_t * cache_mem)
+static int test_sanity_sessions(const sess_cache_t * cache_mem,
+                                const char * what)
 {
     int    ret = -1;
     size_t i = 0;
@@ -1839,8 +1840,9 @@ static int test_sanity_sessions(const sess_cache_t * cache_mem)
             #ifdef HAVE_SESSION_TICKET
             if (s->ticketLenAlloc != 0 ||
                 s->ticketLen > SESSION_TICKET_LEN) {
-                WOLFSSL_MSG_EX("error: s = %p, id = 0x%02x%02x: "
-                               "ticketLenAlloc = %d, ticketLen = %d\n", s,
+                WOLFSSL_MSG_EX("error: %s: s = %p, id = 0x%02x%02x: "
+                               "ticketLenAlloc = %d, ticketLen = %d\n",
+                               what, s,
                                s->sessionID[0], s->sessionID[1],
                                s->ticketLenAlloc, s->ticketLen);
                 ret = -1;
@@ -1849,8 +1851,8 @@ static int test_sanity_sessions(const sess_cache_t * cache_mem)
             #endif /* HAVE_SESSION_TICKET */
 
             if (s->type != WOLFSSL_SESSION_TYPE_CACHE) {
-                WOLFSSL_MSG_EX("error: s = %p, id = 0x%02x%02x: "
-                               "type not cache: 0x%02x", s,
+                WOLFSSL_MSG_EX("error: %s: s = %p, id = 0x%02x%02x: "
+                               "type not cache: 0x%02x", what, s,
                                s->sessionID[0], s->sessionID[1],
                                s->type);
                 ret = -1;
@@ -1858,29 +1860,30 @@ static int test_sanity_sessions(const sess_cache_t * cache_mem)
             }
 
             if (s->sessionIDSz != 2) {
-                WOLFSSL_MSG_EX("error: s = %p: got id sz = %d"
-                               ", expected id sz = 2",
-                       s, s->sessionIDSz);
+                WOLFSSL_MSG_EX("error: %s: s = %p: got id sz = %d"
+                               ", expected id sz = 2", what,
+                               s, s->sessionIDSz);
                 ret = -1;
                 goto sanity_fail;
             }
 
             if (s->sessionID[0] != (byte)i ||
                 s->sessionID[1] != (byte)j) {
-                WOLFSSL_MSG_EX("error: s = %p, got id = 0x%02x%02x:"
-                               ", expected id = 0x%02x%02x",
-                       s, s->sessionID[0], s->sessionID[1], (byte)i, (byte)j);
+                WOLFSSL_MSG_EX("error: %s: s = %p, got id = 0x%02x%02x:"
+                               ", expected id = 0x%02x%02x", what, s,
+                               s->sessionID[0], s->sessionID[1],
+                               (byte)i, (byte)j);
                 ret = -1;
                 goto sanity_fail;
             }
 
             /* all the remaining fields should have been sanitized as null */
-            field_null_or_fail(s, "heap", heap);
+            field_null_or_fail(what, s, "heap", heap);
             #if defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)
-            field_null_or_fail(s, "peer", peer);
+            field_null_or_fail(what, s, "peer", peer);
             #endif /* SESSION_CERTS && OPENSSL_EXTRA */
             #if defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA)
-            field_null_or_fail(s, "rem_sess_cb", rem_sess_cb);
+            field_null_or_fail(what, s, "rem_sess_cb", rem_sess_cb);
             #endif /* HAVE_EXT_CACHE || HAVE_EX_DATA */
 
             #ifdef HAVE_EX_DATA
@@ -1993,7 +1996,7 @@ static int test_mem_session_cache(void)
     }
 
     /* sanity check values */
-    ret = test_sanity_sessions(cache_mem);
+    ret = test_sanity_sessions(cache_mem, "mem");
     if (ret) {
         goto cleanup;
     }
@@ -2238,7 +2241,7 @@ static int test_file_session_cache(void)
     }
 
     /* sanity check values */
-    ret = test_sanity_sessions(cache_mem);
+    ret = test_sanity_sessions(cache_mem, "file");
     if (ret) {
         goto file_cleanup;
     }

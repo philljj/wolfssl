@@ -352,11 +352,18 @@ int wolfSSL_memsave_session_cache(void* mem, int sz)
      defined(HAVE_SESSION_TICKET) || \
     (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
     defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
+/* attempt to sanitize a restored session row:
+ *   - shallow copy pointers are nulled, and ex_data is zeroed.
+ *   - ticket len is clamped
+ *   - fields that cannot be meaningfully sanitized will error out if invalid.
+ *
+ * returns 0  on success
+ * returns -1 on error
+ * */
 static int SessionSanityPointerSet(SessionRow* row)
 {
     int ret = 0;
     int j;
-    int k;
 
     /* Reset pointers to safe values after raw copy */
     for (j = 0; j < SESSIONS_PER_ROW; j++) {
@@ -388,22 +395,24 @@ static int SessionSanityPointerSet(SessionRow* row)
         }
 
         if (s->chain.count) {
+            int k;
             for (k = 0; k < s->chain.count; ++k) {
-                if (s->chain.certs[j].length < 0 ||
-                    s->chain.certs[j].length > MAX_X509_SIZE) {
+                if (s->chain.certs[k].length < 0 ||
+                    s->chain.certs[k].length > MAX_X509_SIZE) {
                     WOLFSSL_MSG_EX("session sanity: cert[%d] length: %d",
-                                   j, s->chain.count);
+                                   k, s->chain.count);
                     ret = -1;
                     break;
                 }
             }
         }
         #ifdef WOLFSSL_SESSION_ID_CTX
-        /* sessionCtx is deep copied, but can't exceed ID_LEN.
-         * todo: consider failing the restore if sessionCtxSz is invalid. */
+        /* sessionCtx is deep copied, but can't exceed ID_LEN. */
         if (s->sessionCtxSz > ID_LEN) {
-            XMEMSET(s->sessionCtx, 0, ID_LEN);
-            s->sessionCtxSz = 0;
+            WOLFSSL_MSG_EX("session sanity: sessionCtxSz: %d",
+                           s->sessionCtxSz);
+            ret = -1;
+            break;
         }
         #endif /* WOLFSSL_SESSION_ID_CTX */
 
@@ -652,21 +661,17 @@ int wolfSSL_restore_session_cache(const char *fname)
 
         ret = (int)XFREAD(&SessionCache[i], SIZEOF_SESSION_ROW, 1, file);
     #if !defined(SESSION_CACHE_DYNAMIC_MEM) && \
-        (defined(PERSIST_SESSION_CACHE) || \
-         defined(HAVE_SESSION_TICKET) || \
-        (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
-        defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
+        (defined(PERSIST_SESSION_CACHE) || defined(HAVE_SESSION_TICKET) || \
+         (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
+         defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
         if (ret != 1) {
-            WOLFSSL_MSG("Session cache member file read failed");
+            WOLFSSL_MSG_EX("Session cache member file read failed: %s: %d",
+                           file, ret);
             XMEMSET(&SessionCache[i], 0, SIZEOF_SESSION_ROW);
             rc = FREAD_ERROR;
         }
         else {
-            /* reset ret to 0 (success) */
-            ret = 0;
-        }
-
-        if (ret == 0) {
+            /* file read success. now sanitize the imported session row. */
             ret = SessionSanityPointerSet(&SessionCache[i]);
 
             if (ret) {
@@ -678,7 +683,7 @@ int wolfSSL_restore_session_cache(const char *fname)
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
         SESSION_ROW_UNLOCK(&SessionCache[i]);
     #endif
-        if (ret != 1) {
+        if (ret) {
             break;
         }
     }
