@@ -386,8 +386,9 @@ static int SessionSanityPointerSet(SessionRow* row)
         }
         #endif /* WOLFSSL_TLS13 && HAVE_SESSION_TICKET && etc. */
 
+        #ifdef SESSION_CERTS
         if (s->chain.count < 0 || s->chain.count > MAX_CHAIN_DEPTH) {
-            WOLFSSL_MSG_EX("session sanity: chain count: %d",
+            WOLFSSL_MSG_EX("session sanity: bad chain count: %d",
                            s->chain.count);
             ret = -1;
             break;
@@ -398,13 +399,15 @@ static int SessionSanityPointerSet(SessionRow* row)
             for (k = 0; k < s->chain.count; ++k) {
                 if (s->chain.certs[k].length < 0 ||
                     s->chain.certs[k].length > MAX_X509_SIZE) {
-                    WOLFSSL_MSG_EX("session sanity: cert[%d] length: %d",
+                    WOLFSSL_MSG_EX("session sanity: cert[%d] bad length: %d",
                                    k, s->chain.count);
                     ret = -1;
                     break;
                 }
             }
         }
+        #endif /* SESSION_CERTS */
+
         #ifdef WOLFSSL_SESSION_ID_CTX
         /* sessionCtx is deep copied, but can't exceed ID_LEN. */
         if (s->sessionCtxSz > ID_LEN) {
