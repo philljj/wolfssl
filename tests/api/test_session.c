@@ -2027,7 +2027,7 @@ static int test_mem_session_cache(void)
     /* verify that invalid cache gives CACHE_MATCH_ERROR */
     cache_mem->hdr.version = WOLFSSL_CACHE_VERSION - 1;
     rst_err = wolfSSL_memrestore_session_cache(cache_mem, mem_sz);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: memrestore: hdr.version: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2037,7 +2037,7 @@ static int test_mem_session_cache(void)
     cache_mem->hdr.version = WOLFSSL_CACHE_VERSION;
     cache_mem->hdr.rows = SESSION_ROWS - 1;
     rst_err = wolfSSL_memrestore_session_cache(cache_mem, mem_sz);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: memrestore: hdr.rows: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2047,7 +2047,7 @@ static int test_mem_session_cache(void)
     cache_mem->hdr.rows = SESSION_ROWS;
     cache_mem->hdr.columns = SESSIONS_PER_ROW - 1;
     rst_err = wolfSSL_memrestore_session_cache(cache_mem, mem_sz);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: memrestore: hdr.columns: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2057,7 +2057,7 @@ static int test_mem_session_cache(void)
     cache_mem->hdr.columns = SESSIONS_PER_ROW;
     cache_mem->hdr.sessionSz = (int)(sizeof(WOLFSSL_SESSION) - 1);
     rst_err = wolfSSL_memrestore_session_cache(cache_mem, mem_sz);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: memrestore: hdr.sessionSz: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2307,7 +2307,7 @@ static int test_file_session_cache(void)
     ret = test_write_file(fname, cache_mem);
     if (ret) { goto file_cleanup; }
     rst_err = wolfSSL_restore_session_cache(fname);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: restore: hdr.version: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2319,7 +2319,7 @@ static int test_file_session_cache(void)
     ret = test_write_file(fname, cache_mem);
     if (ret) { goto file_cleanup; }
     rst_err = wolfSSL_restore_session_cache(fname);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: restore: hdr.rows: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2331,7 +2331,7 @@ static int test_file_session_cache(void)
     ret = test_write_file(fname, cache_mem);
     if (ret) { goto file_cleanup; }
     rst_err = wolfSSL_restore_session_cache(fname);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: restore: hdr.columns: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
@@ -2343,7 +2343,7 @@ static int test_file_session_cache(void)
     ret = test_write_file(fname, cache_mem);
     if (ret) { goto file_cleanup; }
     rst_err = wolfSSL_restore_session_cache(fname);
-    if (rst_err != CACHE_MATCH_ERROR) {
+    if (rst_err != WC_NO_ERR_TRACE(CACHE_MATCH_ERROR)) {
         WOLFSSL_MSG_EX("error: restore: hdr.sessionSz: got %d, expected %d",
                        rst_err, CACHE_MATCH_ERROR);
         ret = -1;
