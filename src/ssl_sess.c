@@ -346,7 +346,6 @@ int wolfSSL_memsave_session_cache(void* mem, int sz)
     return WOLFSSL_SUCCESS;
 }
 
-
 #if !defined(SESSION_CACHE_DYNAMIC_MEM) && \
     (defined(PERSIST_SESSION_CACHE) || \
      defined(HAVE_SESSION_TICKET) || \
@@ -489,9 +488,7 @@ int wolfSSL_memrestore_session_cache(const void* mem, int sz)
     #endif
 
         XMEMCPY(&SessionCache[i], row++, SIZEOF_SESSION_ROW);
-    #if !defined(SESSION_CACHE_DYNAMIC_MEM) && \
-        (defined(PERSIST_SESSION_CACHE) || \
-         defined(HAVE_SESSION_TICKET) || \
+    #if (defined(HAVE_SESSION_TICKET) || \
         (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
         defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
         ret = SessionSanityPointerSet(&SessionCache[i]);
@@ -660,8 +657,7 @@ int wolfSSL_restore_session_cache(const char *fname)
     #endif
 
         ret = (int)XFREAD(&SessionCache[i], SIZEOF_SESSION_ROW, 1, file);
-    #if !defined(SESSION_CACHE_DYNAMIC_MEM) && \
-        (defined(PERSIST_SESSION_CACHE) || defined(HAVE_SESSION_TICKET) || \
+    #if (defined(HAVE_SESSION_TICKET) || \
          (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
          defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
         if (ret != 1) {
