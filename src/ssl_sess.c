@@ -277,9 +277,9 @@ int wolfSSL_SetServerID(WOLFSSL* ssl, const byte* id, int len, int newSession)
 int wolfSSL_get_session_cache_memsize(void)
 {
     int sz  = (int)(sizeof(SessionCache) + sizeof(cache_header_t));
-#ifndef NO_CLIENT_CACHE
+    #ifndef NO_CLIENT_CACHE
     sz += (int)(sizeof(ClientCache));
-#endif
+    #endif
     return sz;
 }
 
@@ -309,12 +309,12 @@ int wolfSSL_memsave_session_cache(void* mem, int sz)
     cache_header.sessionSz = (int)sizeof(WOLFSSL_SESSION);
     XMEMCPY(mem, &cache_header, sizeof(cache_header));
 
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     if (SESSION_ROW_RD_LOCK(row) != 0) {
         WOLFSSL_MSG("Session cache mutex lock failed");
         return BAD_MUTEX_E;
     }
-#endif
+    #endif
     for (i = 0; i < cache_header.rows; ++i) {
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
         if (SESSION_ROW_RD_LOCK(&SessionCache[i]) != 0) {
@@ -328,29 +328,24 @@ int wolfSSL_memsave_session_cache(void* mem, int sz)
         SESSION_ROW_UNLOCK(&SessionCache[i]);
     #endif
     }
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     SESSION_ROW_UNLOCK(row);
-#endif
+    #endif
 
-#ifndef NO_CLIENT_CACHE
+    #ifndef NO_CLIENT_CACHE
     if (wc_LockMutex(&clisession_mutex) != 0) {
         WOLFSSL_MSG("Client cache mutex lock failed");
         return BAD_MUTEX_E;
     }
     XMEMCPY(row, ClientCache, sizeof(ClientCache));
     wc_UnLockMutex(&clisession_mutex);
-#endif
+    #endif
 
     WOLFSSL_LEAVE("wolfSSL_memsave_session_cache", WOLFSSL_SUCCESS);
 
     return WOLFSSL_SUCCESS;
 }
 
-#if !defined(SESSION_CACHE_DYNAMIC_MEM) && \
-    (defined(PERSIST_SESSION_CACHE) || \
-     defined(HAVE_SESSION_TICKET) || \
-    (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
-    defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
 /* attempt to sanitize a restored session row:
  *   - shallow copy pointers are nulled, and ex_data is zeroed.
  *   - ticket len is clamped
@@ -443,7 +438,6 @@ static int SessionSanityPointerSet(SessionRow* row)
 
     return ret;
 }
-#endif /* !SESSION_CACHE_DYNAMIC_MEM && (HAVE_SESSION_TICKET || etc. ) */
 
 /* Restore the persistent session cache from memory */
 int wolfSSL_memrestore_session_cache(const void* mem, int sz)
@@ -476,12 +470,12 @@ int wolfSSL_memrestore_session_cache(const void* mem, int sz)
         return CACHE_MATCH_ERROR;
     }
 
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     if (SESSION_ROW_WR_LOCK(&SessionCache[0]) != 0) {
         WOLFSSL_MSG("Session cache mutex lock failed");
         return BAD_MUTEX_E;
     }
-#endif
+    #endif
     for (i = 0; i < cache_header.rows; ++i) {
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
         if (SESSION_ROW_WR_LOCK(&SessionCache[i]) != 0) {
@@ -491,11 +485,7 @@ int wolfSSL_memrestore_session_cache(const void* mem, int sz)
     #endif
 
         XMEMCPY(&SessionCache[i], row++, SIZEOF_SESSION_ROW);
-    #if (defined(HAVE_SESSION_TICKET) || \
-        (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
-        defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
         ret = SessionSanityPointerSet(&SessionCache[i]);
-    #endif
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
         SESSION_ROW_UNLOCK(&SessionCache[i]);
     #endif
@@ -504,9 +494,9 @@ int wolfSSL_memrestore_session_cache(const void* mem, int sz)
             break;
         }
     }
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     SESSION_ROW_UNLOCK(&SessionCache[0]);
-#endif
+    #endif
 
     if (ret == 0) {
         #ifndef NO_CLIENT_CACHE
@@ -556,13 +546,13 @@ int wolfSSL_save_session_cache(const char *fname)
         return FWRITE_ERROR;
     }
 
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     if (SESSION_ROW_RD_LOCK(&SessionCache[0]) != 0) {
         WOLFSSL_MSG("Session cache mutex lock failed");
         XFCLOSE(file);
         return BAD_MUTEX_E;
     }
-#endif
+    #endif
     /* session cache */
     for (i = 0; i < cache_header.rows; ++i) {
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
@@ -583,11 +573,11 @@ int wolfSSL_save_session_cache(const char *fname)
             break;
         }
     }
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     SESSION_ROW_UNLOCK(&SessionCache[0]);
-#endif
+    #endif
 
-#ifndef NO_CLIENT_CACHE
+    #ifndef NO_CLIENT_CACHE
     /* client cache */
     if (wc_LockMutex(&clisession_mutex) != 0) {
         WOLFSSL_MSG("Client cache mutex lock failed");
@@ -600,7 +590,7 @@ int wolfSSL_save_session_cache(const char *fname)
         rc = FWRITE_ERROR;
     }
     wc_UnLockMutex(&clisession_mutex);
-#endif /* !NO_CLIENT_CACHE */
+    #endif /* !NO_CLIENT_CACHE */
 
     XFCLOSE(file);
     WOLFSSL_LEAVE("wolfSSL_save_session_cache", rc);
@@ -642,13 +632,13 @@ int wolfSSL_restore_session_cache(const char *fname)
         return CACHE_MATCH_ERROR;
     }
 
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     if (SESSION_ROW_WR_LOCK(&SessionCache[0]) != 0) {
         WOLFSSL_MSG("Session cache mutex lock failed");
         XFCLOSE(file);
         return BAD_MUTEX_E;
     }
-#endif
+    #endif
     /* session cache */
     for (i = 0; i < cache_header.rows; ++i) {
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
@@ -660,9 +650,6 @@ int wolfSSL_restore_session_cache(const char *fname)
     #endif
 
         ret = (int)XFREAD(&SessionCache[i], SIZEOF_SESSION_ROW, 1, file);
-    #if (defined(HAVE_SESSION_TICKET) || \
-         (defined(SESSION_CERTS) && defined(OPENSSL_EXTRA)) || \
-         defined(HAVE_EXT_CACHE) || defined(HAVE_EX_DATA))
         if (ret != 1) {
             WOLFSSL_MSG_EX("Session cache member file read failed: %s: %d",
                            file, ret);
@@ -678,7 +665,6 @@ int wolfSSL_restore_session_cache(const char *fname)
                 rc = WOLFSSL_FAILURE;
             }
         }
-    #endif
     #ifdef ENABLE_SESSION_CACHE_ROW_LOCK
         SESSION_ROW_UNLOCK(&SessionCache[i]);
     #endif
@@ -686,9 +672,9 @@ int wolfSSL_restore_session_cache(const char *fname)
             break;
         }
     }
-#ifndef ENABLE_SESSION_CACHE_ROW_LOCK
+    #ifndef ENABLE_SESSION_CACHE_ROW_LOCK
     SESSION_ROW_UNLOCK(&SessionCache[0]);
-#endif
+    #endif
 
     if (ret == 0) {
         #ifndef NO_CLIENT_CACHE
