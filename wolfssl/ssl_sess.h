@@ -48,7 +48,7 @@
        aren't under heavy load, basically allows 200 new sessions per minute
 
        SMALL_SESSION_CACHE only stores 6 sessions, good for embedded clients
-       or systems where the default of is too much RAM.
+       or systems where the default is too much RAM.
        SessionCache takes about 2K, ClientCache takes about 3Kbytes
 
        MICRO_SESSION_CACHE only stores 1 session, good for embedded clients
