@@ -25,6 +25,7 @@
 #include <sys/param.h>
 #include <sys/module.h>
 #include <sys/kernel.h>
+#include <sys/sysctl.h>
 
 #if defined(BSDKM_CRYPTO_REGISTER)
     #include <opencrypto/cryptodev.h>
@@ -63,6 +64,7 @@ MALLOC_DEFINE(M_WOLFSSL, "libwolfssl", "wolfSSL kernel memory");
 #endif
 
 /* common functions. */
+static int  wolfkmod_sysctl(SYSCTL_HANDLER_ARGS);
 static int  wolfkmod_init(void);
 static int  wolfkmod_cleanup(void);
 #if !defined(BSDKM_CRYPTO_REGISTER)
@@ -110,6 +112,72 @@ static int  wolfkdriv_process(device_t dev, struct cryptop *crp, int hint);
         }
     }
 #endif /* HAVE_FIPS */
+
+static int
+wolfkmod_sysctl(SYSCTL_HANDLER_ARGS)
+{
+    int cmd = 0;
+    int error = 0;
+    (void)arg1; (void)arg2;
+
+    error = sysctl_handle_int(oidp, &cmd, 0, req);
+    if (error != 0 || req->newptr == NULL) {
+        return error;
+    }
+
+    switch (cmd) {
+    case 1:
+        #ifndef NO_CRYPT_TEST
+        printf("wolfSSL: running wolfCrypt tests\n");
+        error = wolfcrypt_test(NULL);
+        if (error != 0) {
+            printf("error: wolfcrypt test failed: %d\n", error);
+            error = ECANCELED;
+        }
+        else {
+            printf("info: wolfCrypt self-test passed.\n");
+        }
+        #else
+        error = EOPNOTSUPP;
+        #endif /* NO_CRYPT_TEST */
+
+        break;
+
+    case 2:
+        #ifdef WOLFSSL_KERNEL_BENCHMARKS
+        printf("wolfSSL: running benchmarks\n");
+        error = benchmark_test(NULL);
+        if (error != 0) {
+            printf("error: wolfcrypt benchmark failed: %d\n", error);
+            error = ECANCELED;
+        }
+        else {
+            printf("info: wolfCrypt benchmark passed.\n");
+        }
+        #else
+        error = EOPNOTSUPP;
+        #endif /* WOLFSSL_KERNEL_BENCHMARKS */
+        break;
+
+    case 3:
+        printf("wolfSSL: ordering coffee\n");
+        break;
+
+    default:
+        return EINVAL;
+    }
+
+    return error;
+}
+
+SYSCTL_NODE(_kern, OID_AUTO, wolfssl,
+    CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
+    "wolfSSL kernel module");
+
+SYSCTL_PROC(_kern_wolfssl, OID_AUTO, cmd,
+    CTLTYPE_INT | CTLFLAG_WR | CTLFLAG_MPSAFE,
+    NULL, 0, wolfkmod_sysctl, "I",
+    "1=fips status, 2=run cast, 3=wolfCrypt test, 4=benchmark, 5=coffee");
 
 static int wolfkmod_init(void)
 {
